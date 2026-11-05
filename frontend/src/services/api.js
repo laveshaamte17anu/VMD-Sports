@@ -90,7 +90,7 @@ export const settingsAPI = {
   update: (data) => api.put('/settings', data),
 };
 
-// --- Enquiries ---
+// --- Enquiries (General contact form) ---
 export const enquiriesAPI = {
   submit: (data) => api.post('/enquiries', data),
   getAll: (params) => api.get('/enquiries', { params }),
@@ -105,3 +105,20 @@ export const uploadAPI = {
   logo: (formData) => api.post('/upload/logo', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
 };
 
+// --- Analytics & Product Click Tracking ---
+export const analyticsAPI = {
+  // PUBLIC — no auth required
+  trackClick: (data) => api.post('/analytics/product-click', data),
+  trackWhatsappEnquiry: (data) => api.post('/analytics/whatsapp-enquiry', data),
+
+  // ADMIN — requires JWT token
+  getSummary: () => api.get('/analytics/summary'),
+  getDaily: (params) => api.get('/analytics/daily', { params }),
+  getProducts: (params) => api.get('/analytics/products', { params }),
+  getRecent: (params) => api.get('/analytics/recent', { params }),
+
+  // WhatsApp Enquiries admin
+  getWhatsappEnquiries: (params) => api.get('/analytics/whatsapp-enquiries', { params }),
+  updateWhatsappEnquiry: (id, data) => api.patch(`/analytics/whatsapp-enquiries/${id}`, data),
+  deleteWhatsappEnquiry: (id) => api.delete(`/analytics/whatsapp-enquiries/${id}`),
+};

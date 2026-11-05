@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { productsAPI, categoriesAPI, settingsAPI } from '../services/api';
+import { useProductClickTracker } from '../hooks/useProductClickTracker';
 
 const WHATSAPP_NUMBER_FALLBACK = '919999999999';
 const PRODUCTS_PER_PAGE = 12;
@@ -123,7 +124,7 @@ function StockBadge({ stock }) {
 }
 
 /* ─── Product Card ─── */
-function ProductCard({ product, whatsappNumber }) {
+function ProductCard({ product, whatsappNumber, onCardClick, onWhatsAppClick }) {
   const {
     name,
     slug,
@@ -143,8 +144,17 @@ function ProductCard({ product, whatsappNumber }) {
     (typeof rawImg === 'string' ? rawImg : rawImg?.url) ||
     '/images/vmd_cricket_jersey.jpg';
 
-  const handleWhatsApp = () => {
-    const msg = `Hello VMD Sports! I would like to order:\n• Product: ${name}\n• Price: ₹${displayPrice}\n• Category: ${category?.name || 'VMD Official Merchandise'}\nPlease confirm availability and payment details.`;
+  // Build the production product URL for the WhatsApp message
+  const productUrl = `https://vmd-sports.vercel.app/merchandise/${slug}`;
+
+  const handleWhatsApp = async () => {
+    // 1. Track the enquiry BEFORE opening WhatsApp (fires async, doesn't block)
+    if (onWhatsAppClick) await onWhatsAppClick(product);
+
+    // 2. Open WhatsApp with a detailed message including product info + link
+    const displayPriceFormatted = `₹${Number(displayPrice).toLocaleString('en-IN')}`;
+    const originalPriceStr = hasDiscount ? ` (MRP: ₹${Number(price).toLocaleString('en-IN')})` : '';
+    const msg = `Hello VMD Sports! 👋\n\nI am interested in ordering this product:\n\n🏏 *${name}*\n💰 Price: ${displayPriceFormatted}${originalPriceStr}\n🏷️ Category: ${category?.name || 'VMD Official Merchandise'}\n🔗 Product Link: ${productUrl}\n\nPlease share the ordering and payment details. Thank you!`;
     const encoded = encodeURIComponent(msg);
     const num = whatsappNumber || WHATSAPP_NUMBER_FALLBACK;
     window.open(`https://wa.me/${num}?text=${encoded}`, '_blank');
@@ -208,7 +218,7 @@ function ProductCard({ product, whatsappNumber }) {
           <StockBadge stock={stock} />
         </div>
 
-        {/* Actions - Direct WhatsApp Order & View Details */}
+        {/* Actions */}
         <div className="mt-auto pt-4 flex flex-col gap-2">
           <button
             onClick={handleWhatsApp}
@@ -216,10 +226,11 @@ function ProductCard({ product, whatsappNumber }) {
             className="btn-whatsapp w-full justify-center disabled:opacity-40 disabled:cursor-not-allowed text-xs py-3 font-sport uppercase tracking-wider font-bold shadow-lg shadow-[#25D366]/20 hover:shadow-[#25D366]/40"
           >
             <MessageCircle size={15} />
-            Order on WhatsApp
+            Enquire on WhatsApp
           </button>
           <Link
             to={`/merchandise/${slug}`}
+            onClick={() => onCardClick && onCardClick(product)}
             className="btn-secondary w-full justify-center text-xs py-2.5 font-sport uppercase tracking-wider"
           >
             Product Details
@@ -229,7 +240,6 @@ function ProductCard({ product, whatsappNumber }) {
     </motion.div>
   );
 }
-
 /* ─── Main Page ─── */
 export default function MerchandisePage() {
   const [products, setProducts] = useState([]);
@@ -244,6 +254,9 @@ export default function MerchandisePage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
+
+  // ── Click + WhatsApp enquiry tracking ──
+  const { trackClick, trackWhatsappEnquiry } = useProductClickTracker();
 
   /* Fetch settings for WhatsApp number */
   useEffect(() => {
@@ -483,6 +496,8 @@ export default function MerchandisePage() {
                     <ProductCard
                       product={product}
                       whatsappNumber={whatsappNumber}
+                      onCardClick={(p) => trackClick(p, 'card_click')}
+                      onWhatsAppClick={(p) => trackWhatsappEnquiry(p)}
                     />
                   </motion.div>
                 ))}

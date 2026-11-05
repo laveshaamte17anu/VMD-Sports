@@ -3,7 +3,7 @@ import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingBag, FolderTree, CalendarCheck,
   Image, Youtube, MessageSquare, Settings, LogOut, ExternalLink,
-  Menu, X, Shield, ChevronRight
+  Menu, X, Shield, ChevronRight, BarChart2, MessageCircle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import VmdLogo from '../../components/shared/VmdLogo';
@@ -13,6 +13,8 @@ const adminNavLinks = [
   { to: '/admin/bookings', label: 'Bookings Roster', icon: CalendarCheck },
   { to: '/admin/products', label: 'Merchandise Products', icon: ShoppingBag },
   { to: '/admin/categories', label: 'Product Categories', icon: FolderTree },
+  { to: '/admin/analytics', label: 'Product Analytics', icon: BarChart2 },
+  { to: '/admin/whatsapp-enquiries', label: 'WhatsApp Enquiries', icon: MessageCircle },
   { to: '/admin/gallery', label: 'Photo Gallery', icon: Image },
   { to: '/admin/videos', label: 'YouTube Broadcasts', icon: Youtube },
   { to: '/admin/enquiries', label: 'Customer Inquiries', icon: MessageSquare },

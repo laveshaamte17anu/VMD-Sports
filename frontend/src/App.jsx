@@ -5,6 +5,8 @@ import { SettingsProvider } from './context/SettingsContext';
 import { AuthProvider } from './context/AuthContext';
 import Layout from './components/layout/Layout';
 import HomePage from './pages/HomePage';
+import MerchandisePage from './pages/MerchandisePage';
+import ProductDetailPage from './pages/ProductDetailPage';
 
 // Admin imports
 import ProtectedRoute from './components/shared/ProtectedRoute';
@@ -20,6 +22,8 @@ import AdminGallery from './pages/admin/AdminGallery';
 import AdminVideos from './pages/admin/AdminVideos';
 import AdminEnquiries from './pages/admin/AdminEnquiries';
 import AdminSettings from './pages/admin/AdminSettings';
+import AdminProductAnalytics from './pages/admin/AdminProductAnalytics';
+import AdminWhatsAppEnquiries from './pages/admin/AdminWhatsAppEnquiries';
 
 function SectionScroller() {
   const location = useLocation();
@@ -72,7 +76,8 @@ export default function App() {
               <Route index element={<HomePage />} />
               <Route path="about" element={<HomePage />} />
               <Route path="services" element={<HomePage />} />
-              <Route path="merchandise" element={<HomePage />} />
+              <Route path="merchandise" element={<MerchandisePage />} />
+              <Route path="merchandise/:slug" element={<ProductDetailPage />} />
               <Route path="live-streaming" element={<HomePage />} />
               <Route path="contact" element={<HomePage />} />
             </Route>
@@ -98,6 +103,8 @@ export default function App() {
               <Route path="videos" element={<AdminVideos />} />
               <Route path="enquiries" element={<AdminEnquiries />} />
               <Route path="settings" element={<AdminSettings />} />
+              <Route path="analytics" element={<AdminProductAnalytics />} />
+              <Route path="whatsapp-enquiries" element={<AdminWhatsAppEnquiries />} />
             </Route>
 
             {/* Catch-all Fallback */}

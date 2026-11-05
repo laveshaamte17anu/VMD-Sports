@@ -24,6 +24,7 @@ import {
 import toast from 'react-hot-toast';
 import { productsAPI, settingsAPI } from '../services/api';
 import { DEFAULT_3D_PRODUCTS } from './MerchandisePage';
+import { useProductClickTracker } from '../hooks/useProductClickTracker';
 
 const WHATSAPP_FALLBACK = '919999999999';
 const CALL_FALLBACK = '+91 99999 99999';
@@ -122,6 +123,9 @@ export default function ProductDetailPage() {
   const [selectedColor, setSelectedColor] = useState('');
   const [qty, setQty] = useState(1);
 
+  // ── Click tracking ──
+  const { trackClick, trackWhatsappEnquiry } = useProductClickTracker();
+
   /* Helper to set fallback product */
   const applyFallback = (targetSlug) => {
     const fallback = DEFAULT_3D_PRODUCTS.find((p) => p.slug === targetSlug) || DEFAULT_3D_PRODUCTS[0];
@@ -174,6 +178,9 @@ export default function ProductDetailPage() {
         setSelectedSize(p.sizes?.[0]?.size || p.sizes?.[0] || 'M');
         setSelectedColor(p.colors?.[0]?.name || p.colors?.[0] || 'Default');
         setQty(1);
+
+        // Track detail_view for real products (not fallbacks)
+        trackClick(p, 'detail_view');
 
         /* Fetch related */
         if (p.category?.slug || p.category?._id) {
@@ -241,19 +248,27 @@ export default function ProductDetailPage() {
     return typeof found === 'object' ? found.stock : product?.stock;
   };
 
-  const handleWhatsApp = () => {
+  const handleWhatsApp = async () => {
     if (sizes.length > 0 && !selectedSize) {
       toast.error('Please select a size');
       return;
     }
+
+    // Track the WhatsApp enquiry BEFORE opening the app
+    if (product?._id && !String(product._id).startsWith('default-')) {
+      trackWhatsappEnquiry(product).catch(() => {});
+    }
+
+    const productUrl = `https://vmd-sports.vercel.app/merchandise/${product?.slug || ''}`;
     const msg =
-      `Hello VMD Sports! I want to order:\n` +
-      `Product: ${product.name}\n` +
-      (selectedSize ? `Size: ${selectedSize}\n` : '') +
-      (selectedColor ? `Color: ${selectedColor}\n` : '') +
-      `Quantity: ${qty}\n` +
-      `Price: ₹${totalPrice}\n` +
-      `Please confirm availability.`;
+      `Hello VMD Sports! 👋\n\nI want to order:\n` +
+      `🏏 *${product.name}*\n` +
+      (selectedSize  ? `📐 Size: ${selectedSize}\n`   : '') +
+      (selectedColor ? `🎨 Color: ${selectedColor}\n` : '') +
+      `🔢 Quantity: ${qty}\n` +
+      `💰 Price: ₹${totalPrice}\n` +
+      `🔗 Product Link: ${productUrl}\n\n` +
+      `Please confirm availability and payment details. Thank you!`;
     window.open(
       `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(msg)}`,
       '_blank',
