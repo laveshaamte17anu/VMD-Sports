@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+    background-color: #060709;
+  }
+  
+  body {
+    @apply text-white font-sans antialiased;
+    overflow-x: hidden;
+    background-color: #07080A;
+    color: #F3F4F6;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #07080A;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #23272F;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #FF6B00;
+  }
+}
+
+@layer components {
+  /* ─── Premium Sports Buttons ─── */
+  .btn-primary {
+    @apply bg-white text-black font-extrabold py-3.5 px-8 uppercase tracking-widest text-xs font-sport
+           transition-all duration-300 hover:bg-[#FF6B00] hover:text-black inline-flex items-center justify-center gap-2 rounded-sm cursor-pointer shadow-lg hover:shadow-[0_0_25px_rgba(255,107,0,0.4)];
+  }
+  
+  .btn-secondary {
+    @apply border border-white/20 bg-white/[0.04] text-white font-bold py-3.5 px-8 uppercase tracking-widest text-xs font-sport
+           transition-all duration-300 hover:border-[#FF6B00]/70 hover:bg-white/[0.08] hover:text-white inline-flex items-center justify-center gap-2 rounded-sm cursor-pointer backdrop-blur-md;
+  }
+
+  .btn-accent {
+    @apply bg-[#FF6B00] text-black font-black py-3.5 px-8 uppercase tracking-widest text-xs font-sport
+           transition-all duration-300 hover:bg-[#BFFF00] hover:text-black inline-flex items-center justify-center gap-2 rounded-sm cursor-pointer shadow-lg hover:shadow-[0_0_25px_rgba(191,255,0,0.4)];
+  }
+
+  .btn-whatsapp {
+    @apply bg-gradient-to-r from-[#25D366] to-[#1EBE5D] text-black font-black py-3 px-6 uppercase tracking-wider text-xs font-sport
+           transition-all duration-300 hover:brightness-110 hover:shadow-[0_0_20px_rgba(37,211,102,0.4)] inline-flex items-center justify-center gap-2 rounded-sm cursor-pointer;
+  }
+
+  /* ─── Typography & Tags ─── */
+  .section-tag {
+    @apply font-sport text-[#FF6B00] uppercase tracking-[0.25em] text-xs font-bold inline-flex items-center gap-2 mb-3;
+  }
+
+  .section-heading {
+    @apply font-display text-4xl sm:text-5xl md:text-7xl text-white uppercase leading-[0.95] tracking-tight;
+  }
+
+  /* ─── Cards & Panels ─── */
+  .subtle-border {
+    @apply border border-white/[0.08];
+  }
+
+  .glass-panel {
+    background: rgba(14, 16, 20, 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .glass-panel-interactive {
+    background: rgba(14, 16, 20, 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .glass-panel-interactive:hover {
+    border-color: rgba(255, 107, 0, 0.35);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(255, 107, 0, 0.12);
+    transform: translateY(-2px);
+  }
+
+  /* ─── Hairline Divider ─── */
+  .hairline-divider {
+    height: 1px;
+    width: 100%;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 107, 0, 0.35) 30%, rgba(191, 255, 0, 0.25) 70%, transparent 100%);
+  }
+}
+
+/* ─── Background Mesh Pattern ─── */
+.bg-sports-canvas {
+  background-color: #07080A;
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(255, 107, 0, 0.07) 0%, transparent 55%),
+    radial-gradient(circle at 85% 50%, rgba(191, 255, 0, 0.04) 0%, transparent 45%),
+    radial-gradient(circle at 15% 80%, rgba(255, 184, 0, 0.03) 0%, transparent 50%),
+    radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 28px 28px;
+}
+
+/* Subtle image zooms */
+.img-zoom-wrap {
+  overflow: hidden;
+  position: relative;
+}
+.img-zoom-wrap img {
+  transition: transform 0.7s cubic-bezier(0.25, 1, 0.5, 1), filter 0.5s ease;
+}
+.img-zoom-wrap:hover img {
+  transform: scale(1.05);
+}
