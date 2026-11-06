@@ -178,13 +178,29 @@ export default function AdminProductForm() {
 
     if (!formData.name.trim()) return toast.error('Product name is required');
     if (!formData.category) return toast.error('Please select a category');
-    if (!formData.price || Number(formData.price) <= 0) return toast.error('Please enter a valid price in INR');
+    
+    const regularPrice = Number(formData.price);
+    if (!formData.price || isNaN(regularPrice) || regularPrice <= 0) {
+      return toast.error('Please enter a valid MRP price in INR (greater than 0)');
+    }
+
+    let offerPrice = undefined;
+    if (formData.discountPrice !== '' && formData.discountPrice != null) {
+      offerPrice = Number(formData.discountPrice);
+      if (isNaN(offerPrice) || offerPrice <= 0) {
+        return toast.error('Selling/Offer price must be greater than ₹0');
+      }
+      if (offerPrice >= regularPrice) {
+        return toast.error('Selling/Offer price must be strictly lower than regular MRP price');
+      }
+    }
+
     if (formData.images.length === 0) return toast.error('Please add at least one product image');
 
     const payload = {
       ...formData,
-      price: Number(formData.price),
-      discountPrice: formData.discountPrice ? Number(formData.discountPrice) : undefined
+      price: regularPrice,
+      discountPrice: offerPrice,
     };
 
     try {
@@ -298,33 +314,35 @@ export default function AdminProductForm() {
 
             <div>
               <label className="block text-xs uppercase tracking-wider text-gray-400 mb-1">
-                Regular Price (INR ₹) <span className="text-brand-lime">*</span>
+                Regular Price / MRP (₹) <span className="text-brand-lime">*</span>
               </label>
               <input
                 type="number"
                 name="price"
                 value={formData.price}
                 onChange={handleChange}
-                placeholder="e.g. 1999"
+                placeholder="e.g. 1299"
                 required
-                min="0"
+                min="1"
                 className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-lime text-sm font-mono"
               />
+              <span className="text-[10px] text-gray-500 mt-1 block">Maximum Retail Price printed on tag</span>
             </div>
 
             <div>
               <label className="block text-xs uppercase tracking-wider text-gray-400 mb-1">
-                Discount Price (Optional INR ₹)
+                Selling / Deal Price (Optional ₹)
               </label>
               <input
                 type="number"
                 name="discountPrice"
                 value={formData.discountPrice}
                 onChange={handleChange}
-                placeholder="e.g. 1499"
-                min="0"
+                placeholder="e.g. 999"
+                min="1"
                 className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-lime text-sm font-mono"
               />
+              <span className="text-[10px] text-gray-500 mt-1 block">Leave empty if selling at MRP</span>
             </div>
 
             <div className="sm:col-span-2">

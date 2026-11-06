@@ -5,7 +5,7 @@ const whatsappEnquirySchema = new mongoose.Schema({
   productId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product',
-    required: true,
+    required: false,
     index: true,
   },
   productName: {
@@ -30,6 +30,14 @@ const whatsappEnquirySchema = new mongoose.Schema({
     default: null,
   },
   productSlug: {
+    type: String,
+    default: null,
+  },
+  selectedSize: {
+    type: String,
+    default: null,
+  },
+  selectedColor: {
     type: String,
     default: null,
   },
@@ -73,7 +81,6 @@ const whatsappEnquirySchema = new mongoose.Schema({
 
 whatsappEnquirySchema.index({ enquiredAt: -1 });
 whatsappEnquirySchema.index({ productId: 1, enquiredAt: -1 });
-whatsappEnquirySchema.index({ dateIST: 1 });
 whatsappEnquirySchema.index({ status: 1, enquiredAt: -1 });
 
 module.exports = mongoose.model('WhatsappEnquiry', whatsappEnquirySchema);

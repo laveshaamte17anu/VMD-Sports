@@ -175,10 +175,18 @@ export default function AdminProducts() {
                       </td>
 
                       <td className="py-3 px-4">
-                        <span className="font-mono text-white font-bold">₹{p.price?.toLocaleString('en-IN')}</span>
-                        {p.discountPrice && (
-                          <span className="font-mono text-[10px] text-brand-lime block">
-                            Sale: ₹{p.discountPrice?.toLocaleString('en-IN')}
+                        {p.discountPrice && p.discountPrice < p.price ? (
+                          <>
+                            <span className="font-mono text-brand-lime font-bold text-sm block">
+                              ₹{p.discountPrice?.toLocaleString('en-IN')}
+                            </span>
+                            <span className="font-mono text-[10px] text-gray-400 line-through block">
+                              MRP: ₹{p.price?.toLocaleString('en-IN')}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="font-mono text-white font-bold text-sm">
+                            ₹{p.price?.toLocaleString('en-IN')}
                           </span>
                         )}
                       </td>

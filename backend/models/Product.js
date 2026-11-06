@@ -8,7 +8,23 @@ const productSchema = new mongoose.Schema({
   category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
   images: [{ url: String, publicId: String }],
   price: { type: Number, required: true, min: 0 },
-  discountPrice: { type: Number, min: 0 },
+  discountPrice: {
+    type: Number,
+    min: 0,
+    validate: {
+      validator: function(val) {
+        if (val == null || val === '') return true;
+        const currentPrice = this.price != null
+          ? this.price
+          : (this.getUpdate ? (this.getUpdate().$set?.price ?? this.getUpdate()?.price) : null);
+        if (currentPrice != null) {
+          return val < currentPrice;
+        }
+        return true;
+      },
+      message: 'Selling / Offer price ({VALUE}) must be strictly lower than regular MRP price.'
+    }
+  },
   sizes: [{
     size: { type: String, enum: ['S', 'M', 'L', 'XL', 'XXL'] },
     stock: { type: Number, default: 0, min: 0 }

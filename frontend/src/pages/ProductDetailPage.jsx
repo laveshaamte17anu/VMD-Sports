@@ -5,8 +5,6 @@ import {
   ChevronLeft,
   ChevronRight,
   MessageCircle,
-  Phone,
-  Share2,
   Tag,
   Package,
   Info,
@@ -18,16 +16,20 @@ import {
   CheckCircle,
   AlertCircle,
   XCircle,
-  Heart,
-  Copy,
+  Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { productsAPI, settingsAPI } from '../services/api';
 import { DEFAULT_3D_PRODUCTS } from './MerchandisePage';
 import { useProductClickTracker } from '../hooks/useProductClickTracker';
-
-const WHATSAPP_FALLBACK = '919999999999';
-const CALL_FALLBACK = '+91 99999 99999';
+import {
+  openDirectWhatsAppEnquiry,
+  getProductPricing,
+  validateAndNormalizeWhatsAppNumber,
+  toAbsoluteUrl,
+} from '../utils/whatsapp';
+import ProductCard from '../components/shared/ProductCard';
+import WhatsAppEnquiryModal from '../components/shared/WhatsAppEnquiryModal';
 
 /* ─── Skeleton ─── */
 function DetailSkeleton() {
@@ -49,7 +51,7 @@ function DetailSkeleton() {
           <div className="h-6 bg-white/10 rounded w-1/3" />
           <div className="h-20 bg-white/10 rounded w-full" />
           <div className="h-14 bg-white/10 rounded w-full" />
-          <div className="h-14 bg-brand-lime/20 rounded w-full" />
+          <div className="h-14 bg-[#25D366]/20 rounded w-full" />
         </div>
       </div>
     </div>
@@ -60,68 +62,118 @@ function DetailSkeleton() {
 function StockIndicator({ stock }) {
   if (stock === 0)
     return (
-      <span className="flex items-center gap-1.5 text-red-400 text-sm">
+      <span className="flex items-center gap-1.5 text-red-400 text-sm font-sport uppercase tracking-wider font-semibold">
         <XCircle size={14} /> Out of Stock
       </span>
     );
   if (stock <= 5)
     return (
-      <span className="flex items-center gap-1.5 text-yellow-400 text-sm">
-        <AlertCircle size={14} /> Only {stock} left
+      <span className="flex items-center gap-1.5 text-amber-400 text-sm font-sport uppercase tracking-wider font-semibold">
+        <AlertCircle size={14} /> Only {stock} left in stock
       </span>
     );
   return (
-    <span className="flex items-center gap-1.5 text-brand-lime text-sm">
-      <CheckCircle size={14} /> In Stock
+    <span className="flex items-center gap-1.5 text-[#BFFF00] text-sm font-sport uppercase tracking-wider font-semibold">
+      <CheckCircle size={14} /> In Stock (Ready to dispatch)
     </span>
   );
 }
 
-/* ─── Related Product Card ─── */
-function RelatedCard({ product }) {
-  const rawImg = product.images?.[0];
-  const img =
-    (typeof rawImg === 'string' ? rawImg : rawImg?.url) ||
-    '/images/vmd_cricket_jersey.jpg';
-  const price = product.discountPrice || product.price;
-  return (
-    <Link to={`/merchandise/${product.slug}`} className="group">
-      <div className="card-dark overflow-hidden">
-        <div className="product-img-wrap h-40">
-          <img
-            src={img}
-            alt={product.name}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
-        </div>
-        <div className="p-3">
-          <p className="text-white text-sm font-bold line-clamp-2 group-hover:text-brand-lime transition-colors">
-            {product.name}
-          </p>
-          <p className="text-brand-lime font-bold mt-1 text-sm">₹{price}</p>
-        </div>
-      </div>
-    </Link>
-  );
-}
+const FALLBACK_VARIANTS = {
+  'vmd-aerodry-match-day-jersey': {
+    colors: [
+      { name: 'Neon Lime Surge', hex: '#BFFF00' },
+      { name: 'Pure White Classic', hex: '#FFFFFF' },
+    ],
+    sizes: [
+      { size: 'S', stock: 15 },
+      { size: 'M', stock: 30 },
+      { size: 'L', stock: 35 },
+      { size: 'XL', stock: 20 },
+      { size: 'XXL', stock: 10 },
+    ],
+    material: '100% Breathable Recycled Micro-Poly Mesh with AeroDry Ventilation',
+    defaultSize: 'M',
+    defaultColor: 'Neon Lime Surge',
+  },
+  'vmd-pro-strike-cricket-track-pants': {
+    colors: [
+      { name: 'Black', hex: '#111111' },
+      { name: 'Stealth Black & Lime', hex: '#BFFF00' },
+    ],
+    sizes: [
+      { size: 'S', stock: 12 },
+      { size: 'M', stock: 20 },
+      { size: 'L', stock: 25 },
+      { size: 'XL', stock: 18 },
+      { size: 'XXL', stock: 8 },
+    ],
+    material: 'Poly-Spandex Interlock (88% Polyester, 12% Spandex) with 4-Way Stretch',
+    defaultSize: 'L',
+    defaultColor: 'Black',
+  },
+  'vmd-speedster-fielding-shorts': {
+    colors: [
+      { name: 'Pitch Charcoal', hex: '#222222' },
+      { name: 'Cricket White', hex: '#FFFFFF' },
+    ],
+    sizes: [
+      { size: 'S', stock: 10 },
+      { size: 'M', stock: 25 },
+      { size: 'L', stock: 30 },
+      { size: 'XL', stock: 15 },
+      { size: 'XXL', stock: 5 },
+    ],
+    material: '92% Micro-Poly, 8% Elastane with Deep Ball Pockets',
+    defaultSize: 'XL',
+    defaultColor: 'Pitch Charcoal',
+  },
+  'vmd-seam-precision-uv-arm-sleeves': {
+    colors: [
+      { name: 'Neon Lime Accent', hex: '#BFFF00' },
+      { name: 'Stealth Black', hex: '#000000' },
+    ],
+    sizes: [
+      { size: 'S', stock: 20 },
+      { size: 'M', stock: 40 },
+      { size: 'L', stock: 40 },
+      { size: 'XL', stock: 20 },
+    ],
+    material: 'High-Tension Nylon-Spandex Compression Weave (UPF 50+)',
+    defaultSize: 'M',
+    defaultColor: 'Neon Lime Accent',
+  },
+  'vmd-elite-cricket-gear-accessories-kit': {
+    colors: [
+      { name: 'VMD Stealth Edition', hex: '#000000' },
+      { name: 'VMD Lime Surge', hex: '#BFFF00' },
+    ],
+    sizes: [
+      { size: 'Free Size', stock: 50 },
+    ],
+    material: 'Reinforced 600D Cordura & Cotton Terrycloth',
+    defaultSize: 'Free Size',
+    defaultColor: 'VMD Stealth Edition',
+  },
+};
 
-/* ─── Main Page ─── */
 export default function ProductDetailPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
 
   const [product, setProduct] = useState(null);
-  const [related, setRelated] = useState([]);
-  const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [settings, setSettings] = useState(null);
+  const [related, setRelated] = useState([]);
 
   const [mainImg, setMainImg] = useState(0);
   const [zoomed, setZoomed] = useState(false);
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
   const [qty, setQty] = useState(1);
+  const [enquiring, setEnquiring] = useState(false);
+  const [showEnquiryModal, setShowEnquiryModal] = useState(false);
 
   // ── Click tracking ──
   const { trackClick, trackWhatsappEnquiry } = useProductClickTracker();
@@ -130,29 +182,30 @@ export default function ProductDetailPage() {
   const applyFallback = (targetSlug) => {
     const fallback = DEFAULT_3D_PRODUCTS.find((p) => p.slug === targetSlug) || DEFAULT_3D_PRODUCTS[0];
     if (fallback) {
+      const varInfo = FALLBACK_VARIANTS[fallback.slug] || {};
       setProduct({
         ...fallback,
         description:
           fallback.description ||
           `Engineered for professional cricket athletes, the ${fallback.name} delivers athletic performance, moisture control, and iconic VMD sports aesthetics.`,
-        sizes: [
+        sizes: varInfo.sizes || [
           { size: 'S', stock: 12 },
           { size: 'M', stock: 25 },
           { size: 'L', stock: 30 },
           { size: 'XL', stock: 18 },
           { size: 'XXL', stock: 8 },
         ],
-        colors: [
+        colors: varInfo.colors || [
           { name: 'Stealth Black & Lime', hex: '#BFFF00' },
           { name: 'Onyx Monochrome', hex: '#111111' },
         ],
-        material: 'Breathable High-Performance Micro-Poly Stretch Fabric',
+        material: varInfo.material || 'Breathable High-Performance Micro-Poly Stretch Fabric',
         careInstructions: 'Machine wash cold inside out. Do not tumble dry. Line dry in shade.',
-        totalStock: 35,
+        totalStock: fallback.totalStock || 35,
       });
       setMainImg(0);
-      setSelectedSize('M');
-      setSelectedColor('Stealth Black & Lime');
+      setSelectedSize(varInfo.defaultSize || 'M');
+      setSelectedColor(varInfo.defaultColor || 'Stealth Black & Lime');
       setNotFound(false);
       setRelated(DEFAULT_3D_PRODUCTS.filter((x) => x.slug !== targetSlug).slice(0, 4));
     } else {
@@ -175,389 +228,252 @@ export default function ProductDetailPage() {
         }
         setProduct(p);
         setMainImg(0);
-        setSelectedSize(p.sizes?.[0]?.size || p.sizes?.[0] || 'M');
-        setSelectedColor(p.colors?.[0]?.name || p.colors?.[0] || 'Default');
-        setQty(1);
+        const initialSize = p.sizes?.[0]?.size || (typeof p.sizes?.[0] === 'string' ? p.sizes[0] : '') || '';
+        const initialColor = p.colors?.[0]?.name || (typeof p.colors?.[0] === 'string' ? p.colors[0] : '') || '';
+        setSelectedSize(initialSize);
+        setSelectedColor(initialColor);
 
-        // Track detail_view for real products (not fallbacks)
+        // Track detail_view event
         trackClick(p, 'detail_view');
 
-        /* Fetch related */
-        if (p.category?.slug || p.category?._id) {
+        // Fetch related products
+        const catId = p.category?._id || p.category;
+        if (catId) {
           productsAPI
-            .getAll({
-              category: p.category.slug || p.category._id,
-              limit: 4,
-              page: 1,
-            })
+            .getAll({ category: p.category?.slug, limit: 4 })
             .then((r) => {
-              const list = r.data?.products || r.data?.data || [];
-              setRelated(list.filter((x) => x._id !== p._id).slice(0, 4));
+              const rel = r.data?.products || r.data?.data || [];
+              setRelated(rel.filter((x) => x._id !== p._id).slice(0, 4));
             })
-            .catch(() => {
-              setRelated(DEFAULT_3D_PRODUCTS.filter((x) => x.slug !== slug).slice(0, 4));
-            });
+            .catch(() => {});
         }
       })
       .catch(() => {
         applyFallback(slug);
       })
-      .finally(() => setLoading(false));
-  }, [slug]);
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [slug, trackClick]);
+
+  /* Update document metadata and Open Graph tags for WhatsApp link preview */
+  useEffect(() => {
+    if (product?.name) {
+      document.title = `${product.name} | VMD Sports Official Merchandise`;
+      const rawImg = product.images?.[0]?.url || product.images?.[0] || product.image;
+      if (rawImg) {
+        const ogImage = document.querySelector("meta[property='og:image']");
+        if (ogImage) {
+          ogImage.setAttribute('content', toAbsoluteUrl(typeof rawImg === 'string' ? rawImg : rawImg?.url));
+        }
+      }
+    }
+  }, [product]);
 
   /* Fetch settings */
   useEffect(() => {
     settingsAPI
       .getPublic()
-      .then((r) => setSettings(r.data?.settings || r.data?.data || r.data))
+      .then((res) => setSettings(res.data?.settings || res.data?.data || res.data))
       .catch(() => {});
   }, []);
 
-  /* Helpers */
-  const whatsappNumber =
-    settings?.purchaseWhatsApp ||
-    settings?.whatsappNumber ||
-    settings?.contact?.whatsapp ||
-    WHATSAPP_FALLBACK;
-  const callNumber =
-    settings?.generalPhone || settings?.phone || settings?.contact?.phone || CALL_FALLBACK;
+  const images = product?.images?.length
+    ? product.images.map((img) => (typeof img === 'string' ? img : img.url))
+    : product?.image
+    ? [product.image]
+    : ['/images/vmd_cricket_jersey.jpg'];
 
-  const rawImages = product?.images?.length > 0 ? product.images : [];
-  const images = rawImages.map(img => typeof img === 'string' ? img : img?.url).filter(Boolean);
-  if (images.length === 0) images.push('https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=800&auto=format&fit=crop');
+  const pricing = getProductPricing(product);
+  const price = pricing.sellingPrice;
+  const originalPrice = pricing.mrp;
+  const hasDiscount = pricing.hasDiscount;
+  const discountPercent = pricing.discountPercent;
 
-  const displayPrice = product?.discountPrice || product?.price || 0;
-  const hasDiscount =
-    product?.discountPrice && product.discountPrice < product.price;
-  const savingsPct = hasDiscount
-    ? Math.round(
-        ((product.price - product.discountPrice) / product.price) * 100,
-      )
-    : 0;
-  const totalPrice = displayPrice * qty;
-
-  /* Sizes can be objects {size, stock} or strings */
+  const totalPrice = price * qty;
   const sizes = product?.sizes || [];
-  const sizeIsObject = sizes.length > 0 && typeof sizes[0] === 'object';
+  const colors = product?.colors || [];
 
-  const getSizeStock = (sz) => {
-    if (!sizeIsObject) return product?.stock;
-    const found = sizes.find(
-      (s) => s.size === sz || s === sz,
-    );
-    return typeof found === 'object' ? found.stock : product?.stock;
-  };
-
-  const handleWhatsApp = async () => {
-    if (sizes.length > 0 && !selectedSize) {
-      toast.error('Please select a size');
+  const handleWhatsAppEnquiry = () => {
+    // 1. Validate pricing
+    if (!pricing.isValid) {
+      toast.error(pricing.error || 'Product price is missing or invalid.');
       return;
     }
 
-    // Track the WhatsApp enquiry BEFORE opening the app
-    if (product?._id && !String(product._id).startsWith('default-')) {
-      trackWhatsappEnquiry(product).catch(() => {});
+    // 2. Validate WhatsApp number configured in Website Settings
+    const phoneValidation = validateAndNormalizeWhatsAppNumber(settings?.purchaseWhatsApp);
+    if (!phoneValidation.isValid) {
+      toast.error(phoneValidation.error);
+      return;
     }
 
-    const productUrl = `https://vmd-sports.vercel.app/merchandise/${product?.slug || ''}`;
-    const msg =
-      `Hello VMD Sports! 👋\n\nI want to order:\n` +
-      `🏏 *${product.name}*\n` +
-      (selectedSize  ? `📐 Size: ${selectedSize}\n`   : '') +
-      (selectedColor ? `🎨 Color: ${selectedColor}\n` : '') +
-      `🔢 Quantity: ${qty}\n` +
-      `💰 Price: ₹${totalPrice}\n` +
-      `🔗 Product Link: ${productUrl}\n\n` +
-      `Please confirm availability and payment details. Thank you!`;
-    window.open(
-      `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(msg)}`,
-      '_blank',
-    );
-  };
-
-  const handleCall = () => {
-    window.location.href = `tel:${callNumber.replace(/\s/g, '')}`;
-  };
-
-  const handleShare = () => {
-    if (navigator.share) {
-      navigator
-        .share({
-          title: product?.name,
-          url: window.location.href,
-        })
-        .catch(() => {});
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      toast.success('Link copied to clipboard!');
+    // 3. Validate size selection if sizes configured
+    if (sizes.length > 0 && !selectedSize) {
+      toast.error('Please select a size before enquiring.');
+      return;
     }
+
+    setShowEnquiryModal(true);
   };
 
-  const prevImg = () =>
-    setMainImg((p) => (p === 0 ? images.length - 1 : p - 1));
-  const nextImg = () =>
-    setMainImg((p) => (p === images.length - 1 ? 0 : p + 1));
+  if (loading) return <DetailSkeleton />;
 
-  /* ─── 404 ─── */
-  if (notFound)
+  if (notFound || !product) {
     return (
-      <div className="min-h-screen bg-brand-dark flex items-center justify-center">
-        <div className="text-center px-4">
-          <Package size={72} className="text-white/10 mx-auto mb-6" />
-          <h1 className="text-white font-display text-5xl uppercase mb-4">
-            404
-          </h1>
-          <p className="text-white/50 mb-8">Product not found.</p>
-          <Link to="/merchandise" className="btn-primary">
-            <ChevronLeft size={16} />
-            Back to Shop
+      <div className="min-h-screen bg-[#07080A] flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <p className="font-display text-7xl text-white/20 mb-4">404</p>
+          <h2 className="text-2xl font-sport uppercase text-white font-bold mb-2">
+            Product Not Found
+          </h2>
+          <p className="text-white/50 text-sm mb-6">
+            The product you are looking for does not exist or has been removed.
+          </p>
+          <Link to="/merchandise" className="btn-primary inline-flex">
+            Browse All Merchandise
           </Link>
         </div>
       </div>
     );
-
-  /* ─── Loading ─── */
-  if (loading)
-    return (
-      <div className="min-h-screen bg-brand-dark pt-24">
-        <DetailSkeleton />
-      </div>
-    );
+  }
 
   return (
-    <div className="min-h-screen bg-brand-dark">
-      {/* Zoom overlay */}
-      <AnimatePresence>
-        {zoomed && (
-          <motion.div
-            className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center cursor-zoom-out"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setZoomed(false)}
-          >
-            <motion.img
-              src={images[mainImg]}
-              alt={product?.name}
-              className="max-w-[90vw] max-h-[90vh] object-contain"
-              initial={{ scale: 0.8 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.8 }}
-            />
-            <button
-              className="absolute top-6 right-6 text-white/50 hover:text-white"
-              onClick={() => setZoomed(false)}
-            >
-              <XCircle size={32} />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="max-w-7xl mx-auto px-4 pt-28 pb-20">
-        {/* ─── Breadcrumb ─── */}
-        <nav className="flex items-center gap-2 text-sm text-white/40 mb-8 flex-wrap">
-          <Link
-            to="/"
-            className="hover:text-brand-lime transition-colors flex items-center gap-1"
-          >
-            <Home size={13} /> Home
+    <div className="min-h-screen bg-[#07080A] pt-28 pb-20 text-white">
+      {/* ─── Breadcrumb ─── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 mb-8">
+        <nav className="flex items-center gap-2 text-xs font-sport uppercase tracking-wider text-white/40">
+          <Link to="/" className="hover:text-white transition-colors flex items-center gap-1">
+            <Home size={12} /> Home
           </Link>
-          <ChevronRight size={13} />
-          <Link
-            to="/merchandise"
-            className="hover:text-brand-lime transition-colors"
-          >
+          <span>/</span>
+          <Link to="/merchandise" className="hover:text-white transition-colors">
             Merchandise
           </Link>
-          <ChevronRight size={13} />
-          {product?.category?.name && (
-            <>
-              <span className="hover:text-brand-lime transition-colors">
-                {product.category.name}
-              </span>
-              <ChevronRight size={13} />
-            </>
-          )}
-          <span className="text-white/70 line-clamp-1">{product?.name}</span>
+          <span>/</span>
+          <span className="text-[#FF6B00] font-semibold truncate max-w-[200px]">
+            {product.name}
+          </span>
         </nav>
+      </div>
 
-        {/* ─── Main Grid ─── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
-          {/* ─── LEFT: Gallery ─── */}
-          <motion.div
-            className="space-y-4"
-            initial={{ opacity: 0, x: -30 }}
-            animate={{ opacity: 1, x: 0 }}
-          >
-            {/* Main image */}
-            <div className="relative bg-brand-gray-3 aspect-square overflow-hidden group">
-              <AnimatePresence mode="wait">
-                <motion.img
-                  key={mainImg}
-                  src={images[mainImg]}
-                  alt={product?.name}
-                  className="w-full h-full object-contain cursor-zoom-in"
-                  onClick={() => setZoomed(true)}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                />
-              </AnimatePresence>
+          
+          {/* ─── Left: Large Product Image & Gallery ─── */}
+          <div className="space-y-4">
+            <div
+              className="relative aspect-square bg-[#0C0E12] border border-white/10 rounded-2xl overflow-hidden flex items-center justify-center p-4 cursor-zoom-in group select-none shadow-2xl"
+              onClick={() => setZoomed(!zoomed)}
+            >
+              <img
+                src={images[mainImg]}
+                alt={product.name}
+                className={`w-full h-full object-cover rounded-xl transition-all duration-500 ${
+                  zoomed ? 'scale-150 cursor-zoom-out' : 'group-hover:scale-105'
+                }`}
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = '/images/vmd_cricket_jersey.jpg';
+                }}
+              />
 
-              {/* Nav arrows */}
-              {images.length > 1 && (
-                <>
-                  <button
-                    onClick={prevImg}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 glass-dark p-2 opacity-0 group-hover:opacity-100 transition-opacity hover:border-brand-lime/50"
-                  >
-                    <ChevronLeft size={18} />
-                  </button>
-                  <button
-                    onClick={nextImg}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 glass-dark p-2 opacity-0 group-hover:opacity-100 transition-opacity hover:border-brand-lime/50"
-                  >
-                    <ChevronRight size={18} />
-                  </button>
-                </>
+              {hasDiscount && (
+                <span className="absolute top-4 left-4 text-xs font-sport uppercase tracking-widest bg-[#FF6B00] text-black font-extrabold px-3 py-1 rounded-sm shadow-lg">
+                  {discountPercent}% OFF
+                </span>
               )}
 
-              {/* Zoom hint */}
-              <div className="absolute bottom-3 right-3 glass-dark p-1.5 text-white/40 text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                <ZoomIn size={12} /> Click to zoom
+              <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-md text-[11px] font-sport uppercase tracking-wider text-white/70 flex items-center gap-1.5 pointer-events-none">
+                <ZoomIn size={12} />
+                <span>{zoomed ? 'Click to reset' : 'Click to zoom'}</span>
               </div>
-
-              {/* Image counter */}
-              {images.length > 1 && (
-                <div className="absolute bottom-3 left-3 glass-dark px-2 py-1 text-xs text-white/60">
-                  {mainImg + 1} / {images.length}
-                </div>
-              )}
             </div>
 
             {/* Thumbnails */}
             {images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
                 {images.map((img, i) => (
                   <button
                     key={i}
-                    onClick={() => setMainImg(i)}
-                    className={`flex-shrink-0 w-20 h-20 border-2 overflow-hidden transition-all ${
+                    onClick={() => {
+                      setMainImg(i);
+                      setZoomed(false);
+                    }}
+                    className={`relative w-20 h-20 rounded-xl overflow-hidden border-2 flex-shrink-0 transition-all ${
                       mainImg === i
-                        ? 'border-brand-lime'
-                        : 'border-white/10 hover:border-white/30'
+                        ? 'border-[#FF6B00] shadow-[0_0_15px_rgba(255,107,0,0.4)]'
+                        : 'border-white/10 hover:border-white/30 opacity-70 hover:opacity-100'
                     }`}
                   >
-                    <img
-                      src={img}
-                      alt={`View ${i + 1}`}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
+                    <img src={img} alt="" className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>
             )}
-          </motion.div>
+          </div>
 
-          {/* ─── RIGHT: Details ─── */}
-          <motion.div
-            className="space-y-6"
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-          >
-            {/* Category Badge */}
-            {product?.category?.name && (
-              <span className="inline-flex items-center gap-1.5 bg-brand-lime text-brand-black text-xs font-bold font-sport uppercase tracking-widest px-3 py-1">
-                <Tag size={11} />
-                {product.category.name}
+          {/* ─── Right: Product Details & WhatsApp Enquiry ─── */}
+          <div className="space-y-6">
+            
+            {/* Category & Title */}
+            <div>
+              <span className="text-xs font-sport uppercase tracking-[0.2em] text-[#FF6B00] font-bold block mb-1">
+                {product.category?.name || product.category || 'Official Merchandise'}
               </span>
-            )}
+              <h1 className="font-display text-3xl sm:text-4xl uppercase tracking-tight text-white leading-tight">
+                {product.name}
+              </h1>
+            </div>
 
-            {/* Name */}
-            <h1 className="font-display text-4xl md:text-5xl text-white uppercase leading-none tracking-tight">
-              {product?.name}
-            </h1>
-
-            {/* Price */}
-            <div className="flex items-end gap-3 flex-wrap">
-              <span className="text-brand-lime font-bold text-4xl">
-                ₹{displayPrice}
+            {/* Pricing */}
+            <div className="flex items-baseline gap-3 flex-wrap">
+              <span className="font-display text-3xl text-white">
+                ₹{Number(price).toLocaleString('en-IN')}
               </span>
               {hasDiscount && (
-                <>
-                  <span className="text-white/40 text-xl line-through">
-                    ₹{product.price}
-                  </span>
-                  <span className="bg-green-500/20 border border-green-500/30 text-green-400 text-sm font-bold px-2 py-0.5">
-                    {savingsPct}% OFF
-                  </span>
-                </>
+                <span className="text-base font-mono text-white/40 line-through">
+                  ₹{Number(originalPrice).toLocaleString('en-IN')}
+                </span>
+              )}
+              {hasDiscount && (
+                <span className="text-xs font-sport uppercase tracking-wider text-[#FF6B00] font-bold">
+                  Save ₹{Number(originalPrice - price).toLocaleString('en-IN')}
+                </span>
               )}
             </div>
 
-            {hasDiscount && (
-              <p className="text-green-400 text-sm">
-                You save ₹{product.price - product.discountPrice}!
-              </p>
-            )}
-
-            {/* Stock */}
-            <StockIndicator stock={product?.stock} />
+            {/* Stock status */}
+            <div>
+              <StockIndicator stock={product.totalStock ?? product.stock ?? 25} />
+            </div>
 
             {/* Description */}
-            {product?.description && (
-              <p className="text-white/60 leading-relaxed text-sm border-l-2 border-brand-lime/30 pl-4">
-                {product.description}
-              </p>
-            )}
-
-            <div className="neon-line" />
+            <p className="text-white/70 text-sm leading-relaxed border-t border-b border-white/10 py-4">
+              {product.description}
+            </p>
 
             {/* Size Selector */}
             {sizes.length > 0 && (
               <div>
-                <label className="label-dark">
-                  Select Size
-                  {selectedSize && (
-                    <span className="ml-2 text-brand-lime normal-case tracking-normal font-normal">
-                      — {selectedSize}
-                    </span>
-                  )}
+                <label className="text-xs font-sport uppercase tracking-wider text-white/70 font-semibold block mb-2">
+                  Select Size: <span className="text-[#FF6B00] font-bold">{selectedSize}</span>
                 </label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {sizes.map((sz) => {
-                    const szVal = typeof sz === 'object' ? sz.size : sz;
-                    const szStock = getSizeStock(szVal);
-                    const isOOS = szStock === 0;
+                <div className="flex flex-wrap gap-2.5">
+                  {sizes.map((s) => {
+                    const sz = typeof s === 'object' ? s.size : s;
+                    const isSelected = selectedSize === sz;
                     return (
                       <button
-                        key={szVal}
-                        onClick={() => !isOOS && setSelectedSize(szVal)}
-                        disabled={isOOS}
-                        title={
-                          isOOS
-                            ? 'Out of stock'
-                            : szStock <= 5
-                            ? `Only ${szStock} left`
-                            : 'In stock'
-                        }
-                        className={`min-w-[52px] h-12 text-sm font-bold font-sport uppercase border-2 transition-all relative ${
-                          isOOS
-                            ? 'border-white/10 text-white/20 cursor-not-allowed line-through'
-                            : selectedSize === szVal
-                            ? 'border-brand-lime bg-brand-lime text-brand-black'
-                            : 'border-white/30 text-white hover:border-brand-lime hover:text-brand-lime'
+                        key={sz}
+                        onClick={() => setSelectedSize(sz)}
+                        className={`min-w-[48px] h-11 px-3 rounded-lg border text-xs font-sport uppercase tracking-wider font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#FF6B00] text-black border-[#FF6B00] shadow-[0_0_15px_rgba(255,107,0,0.35)]'
+                            : 'bg-white/5 border-white/15 text-white hover:border-white/30'
                         }`}
                       >
-                        {szVal}
-                        {szStock !== undefined && szStock <= 5 && szStock > 0 && (
-                          <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-yellow-500 rounded-full text-[8px] flex items-center justify-center text-black font-bold">
-                            {szStock}
-                          </span>
-                        )}
+                        {sz}
                       </button>
                     );
                   })}
@@ -566,143 +482,143 @@ export default function ProductDetailPage() {
             )}
 
             {/* Color Selector */}
-            {product?.colors?.length > 0 && (
+            {colors.length > 0 && (
               <div>
-                <label className="label-dark">
-                  Color
-                  {selectedColor && (
-                    <span className="ml-2 text-brand-lime normal-case tracking-normal font-normal">
-                      — {selectedColor}
-                    </span>
-                  )}
+                <label className="text-xs font-sport uppercase tracking-wider text-white/70 font-semibold block mb-2">
+                  Select Color: <span className="text-white font-bold">{selectedColor}</span>
                 </label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {product.colors.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setSelectedColor(color)}
-                      className={`px-4 py-2 text-sm font-sport uppercase border-2 transition-all ${
-                        selectedColor === color
-                          ? 'border-brand-lime text-brand-lime'
-                          : 'border-white/20 text-white/60 hover:border-brand-lime/50 hover:text-white'
-                      }`}
-                    >
-                      {color}
-                    </button>
-                  ))}
+                <div className="flex flex-wrap gap-2.5">
+                  {colors.map((c) => {
+                    const colorName = typeof c === 'object' ? c.name : c;
+                    const colorHex = typeof c === 'object' ? c.hex : null;
+                    const isSelected = selectedColor === colorName;
+                    return (
+                      <button
+                        key={colorName}
+                        onClick={() => setSelectedColor(colorName)}
+                        className={`h-10 px-3.5 rounded-lg border text-xs font-sport uppercase tracking-wider font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                          isSelected
+                            ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.35)]'
+                            : 'bg-white/5 border-white/15 text-white hover:border-white/30'
+                        }`}
+                      >
+                        {colorHex && (
+                          <span
+                            className="w-3.5 h-3.5 rounded-full border border-black/30 flex-shrink-0"
+                            style={{ backgroundColor: colorHex }}
+                          />
+                        )}
+                        <span>{colorName}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
             {/* Quantity */}
             <div>
-              <label className="label-dark">Quantity</label>
-              <div className="flex items-center gap-0 mt-2 w-fit border border-white/20">
+              <label className="text-xs font-sport uppercase tracking-wider text-white/70 font-semibold block mb-2">
+                Quantity
+              </label>
+              <div className="flex items-center w-fit border border-white/20 rounded-lg overflow-hidden bg-white/5">
                 <button
                   onClick={() => setQty((q) => Math.max(1, q - 1))}
-                  className="w-11 h-11 flex items-center justify-center text-white hover:bg-white/10 transition-colors border-r border-white/20"
+                  className="w-10 h-10 flex items-center justify-center text-white hover:bg-white/10 transition-colors"
                 >
-                  <Minus size={16} />
+                  <Minus size={15} />
                 </button>
-                <span className="w-14 text-center text-white font-bold text-lg select-none">
+                <span className="w-12 text-center text-white font-mono font-bold text-sm">
                   {qty}
                 </span>
                 <button
-                  onClick={() =>
-                    setQty((q) =>
-                      product?.stock ? Math.min(product.stock, q + 1) : q + 1,
-                    )
-                  }
-                  className="w-11 h-11 flex items-center justify-center text-white hover:bg-white/10 transition-colors border-l border-white/20"
+                  onClick={() => setQty((q) => q + 1)}
+                  className="w-10 h-10 flex items-center justify-center text-white hover:bg-white/10 transition-colors"
                 >
-                  <Plus size={16} />
+                  <Plus size={15} />
                 </button>
               </div>
             </div>
 
-            {/* Total */}
+            {/* Total calculation for qty > 1 */}
             {qty > 1 && (
-              <div className="glass-dark p-3 flex items-center justify-between">
-                <span className="text-white/60 text-sm">Total ({qty} items)</span>
-                <span className="text-brand-lime font-bold text-xl">
-                  ₹{totalPrice}
+              <div className="p-3 bg-white/[0.04] border border-white/10 rounded-lg flex items-center justify-between text-xs font-sport uppercase tracking-wider">
+                <span className="text-white/60">Total Amount ({qty} items):</span>
+                <span className="text-base font-display text-white">
+                  ₹{Number(totalPrice).toLocaleString('en-IN')}
                 </span>
               </div>
             )}
 
-            <div className="neon-line" />
+            {/* PROMINENT DIRECT WHATSAPP ENQUIRY BUTTON */}
+            <div className="pt-2 space-y-3">
+              <button
+                onClick={handleWhatsAppEnquiry}
+                disabled={product.stock === 0 || enquiring}
+                className="w-full py-4 px-6 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-black font-sport uppercase tracking-wider font-extrabold text-sm flex items-center justify-center gap-2.5 transition-all shadow-xl shadow-[#25D366]/20 hover:shadow-[#25D366]/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <MessageCircle size={20} className="fill-current" />
+                <span>{enquiring ? 'Connecting to WhatsApp...' : 'Inquiry on WhatsApp'}</span>
+              </button>
 
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={handleWhatsApp}
-                disabled={product?.stock === 0}
-                className="btn-primary flex-1 justify-center disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <MessageCircle size={18} />
-                Order on WhatsApp
-              </button>
-              <button
-                onClick={handleCall}
-                className="btn-secondary flex-1 justify-center"
-              >
-                <Phone size={18} />
-                Call Us
-              </button>
-              <button
-                onClick={handleShare}
-                className="btn-ghost px-4 py-3 flex items-center justify-center gap-2"
-                title="Share"
-              >
-                <Share2 size={18} />
-                <span className="sm:hidden">Share</span>
-              </button>
+              <p className="text-[11px] text-white/40 text-center font-sport tracking-wider">
+                Direct chat with VMD Sports for sizes, availability, and ordering details.
+              </p>
             </div>
 
             {/* Material & Care */}
-            {(product?.material || product?.careInstructions) && (
-              <div className="glass-dark p-4 space-y-3">
-                <h4 className="text-white/70 text-xs font-sport uppercase tracking-widest flex items-center gap-2">
-                  <Info size={12} />
-                  Material & Care
+            {(product.material || product.careInstructions) && (
+              <div className="p-4 bg-white/[0.03] border border-white/10 rounded-xl space-y-2 text-xs">
+                <h4 className="font-sport uppercase tracking-wider text-white/50 font-bold flex items-center gap-1.5">
+                  <Info size={14} /> Material & Specifications
                 </h4>
                 {product.material && (
-                  <p className="text-white/60 text-sm">
-                    <span className="text-white/40">Material:</span>{' '}
-                    {product.material}
+                  <p className="text-white/70">
+                    <span className="text-white/40">Material:</span> {product.material}
                   </p>
                 )}
                 {product.careInstructions && (
-                  <p className="text-white/60 text-sm">
-                    <span className="text-white/40">Care:</span>{' '}
-                    {product.careInstructions}
+                  <p className="text-white/70">
+                    <span className="text-white/40">Care:</span> {product.careInstructions}
                   </p>
                 )}
               </div>
             )}
-          </motion.div>
+          </div>
         </div>
 
         {/* ─── Related Products ─── */}
         {related.length > 0 && (
-          <section className="mt-24">
-            <div className="neon-line mb-10" />
-            <div className="flex items-center gap-4 mb-8">
-              <div>
-                <p className="section-subtitle">More Products</p>
-                <h2 className="font-display text-3xl text-white uppercase mt-1">
-                  You May Also Like
-                </h2>
-              </div>
+          <section className="mt-24 pt-12 border-t border-white/10">
+            <div className="mb-8">
+              <span className="text-xs font-sport uppercase tracking-[0.2em] text-[#FF6B00] font-bold block mb-1">
+                You May Also Like
+              </span>
+              <h2 className="font-display text-2xl uppercase tracking-wider text-white">
+                Related Sportswear
+              </h2>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
               {related.map((p) => (
-                <RelatedCard key={p._id} product={p} />
+                <ProductCard key={p._id || p.slug} product={p} />
               ))}
             </div>
           </section>
         )}
       </div>
+
+      {/* ─── WhatsApp Enquiry & Attachment Preview Modal ─── */}
+      <WhatsAppEnquiryModal
+        isOpen={showEnquiryModal}
+        onClose={() => setShowEnquiryModal(false)}
+        product={product}
+        settings={settings}
+        selectedSize={selectedSize}
+        selectedColor={selectedColor}
+        qty={qty}
+        currentImage={images[mainImg] || images[0]}
+        tracker={{ trackWhatsappEnquiry }}
+      />
     </div>
   );
 }

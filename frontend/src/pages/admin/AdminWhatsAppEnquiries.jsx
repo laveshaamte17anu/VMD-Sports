@@ -75,14 +75,29 @@ function EnquiryModal({ enquiry, onClose, onUpdate }) {
         </div>
 
         <div className="p-5 space-y-5">
-          {/* Product info */}
+          {/* Product info with Prominent Photo */}
           <div className="flex gap-4 items-start">
             {enquiry.productImageUrl ? (
-              <img src={enquiry.productImageUrl} alt={enquiry.productName}
-                className="w-16 h-16 object-cover rounded-lg border border-white/10 flex-shrink-0" />
+              <a
+                href={enquiry.productImageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Click to view full-resolution photo"
+                className="relative group flex-shrink-0"
+              >
+                <img
+                  src={enquiry.productImageUrl}
+                  alt={enquiry.productName}
+                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/images/cricket-tshirt.webp'; }}
+                  className="w-24 h-24 sm:w-28 sm:h-28 object-cover rounded-xl border border-white/20 shadow-xl group-hover:scale-102 transition-transform"
+                />
+                <span className="absolute bottom-1 right-1 bg-black/80 text-[9px] font-mono px-1.5 py-0.5 rounded text-white/80 border border-white/10">
+                  Full View
+                </span>
+              </a>
             ) : (
-              <div className="w-16 h-16 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center flex-shrink-0">
-                <Package className="w-6 h-6 text-gray-600" />
+              <div className="w-24 h-24 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center flex-shrink-0">
+                <Package className="w-8 h-8 text-gray-600" />
               </div>
             )}
             <div>
@@ -91,15 +106,27 @@ function EnquiryModal({ enquiry, onClose, onUpdate }) {
                 <p className="text-xs text-gray-400 mt-0.5">{enquiry.productCategory}</p>
               )}
               <div className="flex items-center gap-2 mt-1">
-                <span className="text-brand-lime font-bold font-mono">
-                  ₹{Number(enquiry.productDiscountPrice || enquiry.productPrice).toLocaleString('en-IN')}
-                </span>
-                {enquiry.productDiscountPrice && enquiry.productDiscountPrice < enquiry.productPrice && (
-                  <span className="text-white/40 text-xs line-through">
+                {enquiry.productDiscountPrice && Number(enquiry.productDiscountPrice) < Number(enquiry.productPrice) ? (
+                  <>
+                    <span className="text-brand-lime font-bold font-mono">
+                      ₹{Number(enquiry.productDiscountPrice).toLocaleString('en-IN')}
+                    </span>
+                    <span className="text-white/40 text-xs font-mono line-through">
+                      (MRP: ₹{Number(enquiry.productPrice).toLocaleString('en-IN')})
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-brand-lime font-bold font-mono">
                     ₹{Number(enquiry.productPrice).toLocaleString('en-IN')}
                   </span>
                 )}
               </div>
+              {(enquiry.selectedSize || enquiry.selectedColor) && (
+                <div className="flex items-center gap-2.5 mt-1.5 text-xs text-white/70">
+                  {enquiry.selectedSize && <span>Size: <strong className="text-brand-lime">{enquiry.selectedSize}</strong></span>}
+                  {enquiry.selectedColor && <span>Color: <strong className="text-white">{enquiry.selectedColor}</strong></span>}
+                </div>
+              )}
               {enquiry.productSlug && (
                 <a
                   href={`https://vmd-sports.vercel.app/merchandise/${enquiry.productSlug}`}
@@ -337,21 +364,30 @@ export default function AdminWhatsAppEnquiries() {
 
                   return (
                     <tr key={enq._id} className="hover:bg-white/[0.02] transition-colors">
-                      {/* Product */}
+                      {/* Product with Prominent Thumbnail */}
                       <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3.5">
                           {enq.productImageUrl ? (
-                            <img src={enq.productImageUrl} alt={enq.productName}
-                              className="w-10 h-10 object-cover rounded-lg border border-white/10 flex-shrink-0" />
+                            <img
+                              src={enq.productImageUrl}
+                              alt={enq.productName}
+                              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/images/cricket-tshirt.webp'; }}
+                              className="w-14 h-14 object-cover rounded-xl border border-white/15 shadow-md flex-shrink-0"
+                            />
                           ) : (
-                            <div className="w-10 h-10 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center flex-shrink-0">
-                              <Package className="w-4 h-4 text-gray-600" />
+                            <div className="w-14 h-14 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center flex-shrink-0">
+                              <Package className="w-6 h-6 text-gray-600" />
                             </div>
                           )}
                           <div className="min-w-0">
                             <p className="text-white font-medium truncate max-w-[180px]">{enq.productName}</p>
                             {enq.productCategory && (
                               <p className="text-gray-500 text-[10px] mt-0.5">{enq.productCategory}</p>
+                            )}
+                            {(enq.selectedSize || enq.selectedColor) && (
+                              <p className="text-brand-lime/80 text-[10px] mt-0.5 font-mono">
+                                {enq.selectedSize && `Size: ${enq.selectedSize}`} {enq.selectedColor && `• ${enq.selectedColor}`}
+                              </p>
                             )}
                             {enq.adminNotes && (
                               <p className="text-amber-400/70 text-[10px] mt-0.5 truncate max-w-[180px]">
@@ -364,13 +400,19 @@ export default function AdminWhatsAppEnquiries() {
 
                       {/* Price */}
                       <td className="px-4 py-4 text-right">
-                        <span className="text-brand-lime font-mono font-bold">
-                          ₹{Number(enq.productDiscountPrice || enq.productPrice).toLocaleString('en-IN')}
-                        </span>
-                        {enq.productDiscountPrice && enq.productDiscountPrice < enq.productPrice && (
-                          <div className="text-white/30 text-[10px] line-through">
+                        {enq.productDiscountPrice && Number(enq.productDiscountPrice) < Number(enq.productPrice) ? (
+                          <>
+                            <span className="text-brand-lime font-mono font-bold block">
+                              ₹{Number(enq.productDiscountPrice).toLocaleString('en-IN')}
+                            </span>
+                            <div className="text-white/40 text-[10px] font-mono line-through block">
+                              MRP: ₹{Number(enq.productPrice).toLocaleString('en-IN')}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-brand-lime font-mono font-bold block">
                             ₹{Number(enq.productPrice).toLocaleString('en-IN')}
-                          </div>
+                          </span>
                         )}
                       </td>
 

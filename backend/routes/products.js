@@ -50,9 +50,32 @@ router.get('/:slug', async (req, res) => {
 // POST /api/products - Admin
 router.post('/', protect, adminOnly, async (req, res) => {
   try {
-    const { name, ...rest } = req.body;
+    const { name, price, discountPrice, ...rest } = req.body;
+    const regularPrice = Number(price);
+    if (isNaN(regularPrice) || regularPrice <= 0) {
+      return res.status(400).json({ success: false, message: 'Regular MRP price must be a valid number greater than 0.' });
+    }
+
+    let finalDiscount = null;
+    if (discountPrice !== undefined && discountPrice !== null && discountPrice !== '') {
+      const d = Number(discountPrice);
+      if (isNaN(d) || d <= 0) {
+        return res.status(400).json({ success: false, message: 'Selling/Offer price must be greater than 0.' });
+      }
+      if (d >= regularPrice) {
+        return res.status(400).json({ success: false, message: `Selling/Offer price (₹${d}) must be strictly lower than regular MRP price (₹${regularPrice}).` });
+      }
+      finalDiscount = d;
+    }
+
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now();
-    const product = new Product({ name, slug, ...rest });
+    const product = new Product({
+      name,
+      slug,
+      price: regularPrice,
+      discountPrice: finalDiscount,
+      ...rest,
+    });
     await product.save();
     await product.populate('category', 'name slug');
     res.status(201).json({ success: true, product });
@@ -64,8 +87,37 @@ router.post('/', protect, adminOnly, async (req, res) => {
 // PUT /api/products/:id - Admin
 router.put('/:id', protect, adminOnly, async (req, res) => {
   try {
-    const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }).populate('category', 'name slug');
+    const product = await Product.findById(req.params.id);
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+
+    if (req.body.price !== undefined) {
+      const p = Number(req.body.price);
+      if (isNaN(p) || p <= 0) {
+        return res.status(400).json({ success: false, message: 'Regular MRP price must be a valid number greater than 0.' });
+      }
+      product.price = p;
+    }
+
+    if (req.body.discountPrice !== undefined) {
+      if (req.body.discountPrice === '' || req.body.discountPrice === null) {
+        product.discountPrice = null;
+      } else {
+        const d = Number(req.body.discountPrice);
+        if (isNaN(d) || d <= 0) {
+          return res.status(400).json({ success: false, message: 'Selling/Offer price must be greater than 0.' });
+        }
+        if (d >= product.price) {
+          return res.status(400).json({ success: false, message: `Selling/Offer price (₹${d}) must be strictly lower than regular MRP price (₹${product.price}).` });
+        }
+        product.discountPrice = d;
+      }
+    }
+
+    const { price, discountPrice, ...otherFields } = req.body;
+    Object.assign(product, otherFields);
+
+    await product.save();
+    await product.populate('category', 'name slug');
     res.json({ success: true, product });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });

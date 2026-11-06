@@ -1,5 +1,6 @@
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowRight,
   Phone,
@@ -13,9 +14,19 @@ import {
   Trophy,
   CheckCircle2,
   Tv,
+  ShoppingBag,
+  ExternalLink,
+  Sparkles,
+  Layers,
+  ShieldCheck,
   Zap,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useSettings } from '../context/SettingsContext';
+import { productsAPI } from '../services/api';
+import { useProductClickTracker } from '../hooks/useProductClickTracker';
+import { openDirectWhatsAppEnquiry } from '../utils/whatsapp';
+import ProductCard from '../components/shared/ProductCard';
 
 // ─── 4 SERVICES (IMAGE-FIRST EDITORIAL TILES) ─────────────────────────────
 const SERVICES = [
@@ -57,99 +68,212 @@ const SERVICES = [
   },
 ];
 
-// ─── 5 MERCHANDISE CATEGORIES (ACCURATE 3D / PRODUCT RENDERS) ───────────────
-const PRODUCTS = [
+// ─── 5 FOUNDATIONAL MERCHANDISE CATEGORIES (DISTINCT IMAGES & SPECS) ────────
+const FOUNDATIONAL_PRODUCTS = [
   {
-    id: 'track-pants',
-    name: 'VMD Pro Strike Track Pants',
-    category: 'Track Pants',
-    tech: '4-Way Stretch • AeroFit',
-    price: 1999,
-    image: '/images/track-pants.webp',
+    _id: '6aec300007842a09f7d89e11',
+    name: 'VMD AeroDry Match Day Jersey',
+    slug: 'vmd-aerodry-match-day-jersey',
+    category: { name: 'T-Shirts', slug: 't-shirts' },
+    categorySlug: 't-shirts',
+    tech: 'Sweat-Wicking • AeroMesh Cooling',
+    price: 1299,
+    discountPrice: 999,
+    image: '/images/vmd_cricket_jersey.jpg',
+    images: ['/images/vmd_cricket_jersey.jpg', '/images/cricket-tshirt.webp'],
+    badge: 'Bestseller',
   },
   {
-    id: 't-shirts',
-    name: 'VMD AeroDry Match Jersey',
-    category: 'T-Shirts',
-    tech: 'Sweat-Wicking • Breathable',
-    price: 999,
-    image: '/images/cricket-tshirt.webp',
+    _id: '6aec300007842a09f7d89e07',
+    name: 'VMD Pro Strike Cricket Track Pants',
+    slug: 'vmd-pro-strike-cricket-track-pants',
+    category: { name: 'Track Pants', slug: 'track' },
+    categorySlug: 'track',
+    tech: '4-Way Stretch • AeroFit • Zipper Cuffs',
+    price: 2499,
+    discountPrice: 1999,
+    image: '/images/vmd_track_pants.jpg',
+    images: ['/images/vmd_track_pants.jpg', '/images/track-pants.webp'],
+    badge: 'Pro Grade',
   },
   {
-    id: 'shorts',
+    _id: '6aec300007842a09f7d89e1b',
     name: 'VMD Speedster Fielding Shorts',
-    category: 'Shorts',
-    tech: 'Ultra-Light • Deep Pockets',
-    price: 799,
-    image: '/images/sports-shorts.webp',
+    slug: 'vmd-speedster-fielding-shorts',
+    category: { name: 'Shorts', slug: 'shorts' },
+    categorySlug: 'shorts',
+    tech: 'Ultra-Light • Deep Ball Pockets',
+    price: 999,
+    discountPrice: 799,
+    image: '/images/vmd_cricket_shorts.jpg',
+    images: ['/images/vmd_cricket_shorts.jpg', '/images/sports-shorts.webp'],
+    badge: 'Field Tested',
   },
   {
-    id: 'sleeves',
-    name: 'VMD Seam Precision UV Sleeves',
-    category: 'Sleeves',
-    tech: 'UV 50+ • Muscle Compression',
-    price: 449,
-    image: '/images/arm-sleeves.webp',
+    _id: '6aec300007842a09f7d89e25',
+    name: 'VMD Seam Precision UV Arm Sleeves',
+    slug: 'vmd-seam-precision-uv-arm-sleeves',
+    category: { name: 'Sleeves', slug: 'sleeves' },
+    categorySlug: 'sleeves',
+    tech: 'UPF 50+ • Muscle Compression Grip',
+    price: 599,
+    discountPrice: 449,
+    image: '/images/vmd_arm_sleeves.jpg',
+    images: ['/images/vmd_arm_sleeves.jpg', '/images/arm-sleeves.webp'],
+    badge: 'Sun Armor',
   },
   {
-    id: 'accessories',
-    name: 'VMD Elite Cricket Gear Kit',
-    category: 'Accessories',
-    tech: 'Heavy-Duty • Complete Kit',
-    price: 1499,
-    image: '/images/sports-accessories.webp',
+    _id: 'default-5',
+    name: 'VMD Elite Cricket Gear & Accessories Kit',
+    slug: 'vmd-elite-cricket-gear-accessories-kit',
+    category: { name: 'Accessories', slug: 'accessories' },
+    categorySlug: 'accessories',
+    tech: 'Heavy-Duty • Pro Cap & Wristbands',
+    price: 1899,
+    discountPrice: 1499,
+    image: '/images/vmd_sports_accessories.jpg',
+    images: ['/images/vmd_sports_accessories.jpg', '/images/sports-accessories.webp'],
+    badge: 'Complete Kit',
   },
+];
+
+// 5 Main Sportswear Categories
+const CATEGORIES_LIST = [
+  { name: 'All Products', slug: 'all' },
+  { name: 'T-Shirts', slug: 't-shirts' },
+  { name: 'Track Pants', slug: 'track' },
+  { name: 'Shorts', slug: 'shorts' },
+  { name: 'Sleeves', slug: 'sleeves' },
+  { name: 'Accessories', slug: 'accessories' },
 ];
 
 export default function HomePage() {
   const { settings } = useSettings();
+  const { trackClick, trackWhatsappEnquiry } = useProductClickTracker();
+
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [dbProducts, setDbProducts] = useState([]);
 
   const phone = settings?.generalPhone || settings?.phone || '+91 98194 83036';
-  const whatsappNum = (settings?.purchaseWhatsApp || settings?.livestreamWhatsApp || phone).replace(/\D/g, '');
+  const whatsappNum = (settings?.purchaseWhatsApp || settings?.livestreamWhatsApp || phone).replace(/\D/g, '') || '919819483036';
   const email = settings?.contactEmail || 'vdhavade50@gmail.com';
   const instagram = settings?.instagram || 'https://www.instagram.com/vmdsportlive?utm_source=ig_web_button_share_sheet&psln=ZDNlZDc0MzIxNw==';
   const youtube = settings?.youtubeChannel || 'https://www.youtube.com/@vmdsportslive';
+  const whatsappChatUrl = `https://wa.me/${whatsappNum}?text=${encodeURIComponent('Hello VMD Sports! I would like to get in touch with you.')}`;
+
+  // Fetch real products from backend to enrich fallback with live MongoDB data
+  useEffect(() => {
+    productsAPI.getAll({ limit: 20 })
+      .then((res) => {
+        const fetched = res.data?.products || res.data?.data || [];
+        if (fetched.length > 0) {
+          setDbProducts(fetched);
+        }
+      })
+      .catch((err) => {
+        console.debug('Using curated foundational products', err);
+      });
+  }, []);
+
+  // Merge live DB products with foundational products to ensure all 5 categories have accurate individual images
+  const products = useMemo(() => {
+    const enriched = FOUNDATIONAL_PRODUCTS.map((fallback) => {
+      const match = dbProducts.find((p) => p.slug === fallback.slug || p._id === fallback._id);
+      if (!match) return fallback;
+
+      const rawImg = match.images?.[0];
+      const matchImg = (typeof rawImg === 'string' ? rawImg : rawImg?.url) || fallback.image;
+
+      return {
+        ...fallback,
+        _id: match._id || fallback._id,
+        name: match.name || fallback.name,
+        price: match.price !== undefined ? match.price : fallback.price,
+        discountPrice: match.discountPrice !== undefined ? match.discountPrice : fallback.discountPrice,
+        category: match.category || fallback.category,
+        categorySlug: match.category?.slug || fallback.categorySlug,
+        image: matchImg,
+        images: match.images?.length ? match.images : fallback.images,
+      };
+    });
+
+    const extraDbProds = dbProducts.filter(
+      (p) => !FOUNDATIONAL_PRODUCTS.some((f) => f.slug === p.slug || f._id === p._id)
+    );
+
+    return [...enriched, ...extraDbProds];
+  }, [dbProducts]);
+
+  // Dynamic counts for each category
+  const categoryCounts = useMemo(() => {
+    const counts = { all: products.length, 't-shirts': 0, track: 0, shorts: 0, sleeves: 0, accessories: 0 };
+    products.forEach((p) => {
+      const catSlug = p.category?.slug || p.categorySlug;
+      if (catSlug && counts[catSlug] !== undefined) {
+        counts[catSlug]++;
+      }
+    });
+    return counts;
+  }, [products]);
+
+  // Filter products by selected category
+  const filteredProducts = useMemo(() => {
+    if (activeCategory === 'all') return products;
+    return products.filter((p) => {
+      const catSlug = p.category?.slug || p.categorySlug;
+      return catSlug === activeCategory;
+    });
+  }, [products, activeCategory]);
 
   const scrollTo = (id) => {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleWhatsAppEnquiry = (productName, price) => {
-    const msg = `Hello VMD Sports! I would like to enquire about the ${productName} (₹${price.toLocaleString('en-IN')}). Please share availability and details.`;
-    window.open(`https://wa.me/${whatsappNum}?text=${encodeURIComponent(msg)}`, '_blank');
+  const handleDirectWhatsApp = (prod) => {
+    openDirectWhatsAppEnquiry({
+      product: prod,
+      settings,
+      tracker: { trackWhatsappEnquiry },
+      onSuccess: ({ phoneFormatted }) => {
+        toast.success(`Opening WhatsApp chat with VMD Sports (${phoneFormatted || '+91 98194 83036'})...`);
+      },
+      onError: (errMsg) => {
+        toast.error(errMsg);
+      },
+    });
   };
 
   return (
     <div className="bg-sports-canvas text-white selection:bg-[#FF6B00] selection:text-black relative overflow-hidden">
 
       {/* ─── Ambient Glow Accents (Desktop Depth) ─── */}
-      <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-b from-[#FF6B00]/10 via-[#BFFF00]/5 to-transparent blur-3xl -z-10" />
+      <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[550px] bg-gradient-to-b from-[#FF6B00]/12 via-[#BFFF00]/5 to-transparent blur-3xl -z-10" />
       <div className="pointer-events-none absolute top-[1200px] -left-48 w-96 h-96 bg-[#FF6B00]/8 rounded-full blur-3xl -z-10" />
       <div className="pointer-events-none absolute top-[2200px] -right-48 w-96 h-96 bg-[#BFFF00]/6 rounded-full blur-3xl -z-10" />
 
       {/* ════════════════════════════════════════════════════════════════════════
-          1. HERO SECTION
+          1. HERO SECTION (PREMIUM SPORTSWEAR & BROADCAST BRAND IDENTITY)
       ════════════════════════════════════════════════════════════════════════ */}
       <section
         id="home"
-        className="relative min-h-screen flex items-center justify-center overflow-hidden px-6 pt-28 pb-20"
+        className="relative min-h-[92vh] flex items-center justify-center overflow-hidden px-4 sm:px-6 pt-32 pb-20"
       >
         {/* Cinematic Cricket Stadium Background */}
         <div className="absolute inset-0 z-0">
           <img
             src="/images/hero-cricket-stadium.webp"
             alt="Cricket Stadium Floodlights and Match Action"
-            className="w-full h-full object-cover object-center filter brightness-[0.42] contrast-125 scale-100"
+            className="w-full h-full object-cover object-center filter brightness-[0.38] contrast-125 scale-100"
           />
           {/* Multi-layered cinematic vignette & lighting */}
           <div
             className="absolute inset-0 pointer-events-none"
             style={{
               background: `
-                radial-gradient(circle at 50% 30%, rgba(255,107,0,0.18) 0%, transparent 60%),
-                radial-gradient(circle at 80% 80%, rgba(191,255,0,0.10) 0%, transparent 50%),
-                linear-gradient(180deg, rgba(7,8,10,0.85) 0%, rgba(7,8,10,0.3) 35%, rgba(7,8,10,0.8) 80%, #07080A 100%)
+                radial-gradient(circle at 50% 25%, rgba(255,107,0,0.22) 0%, transparent 60%),
+                radial-gradient(circle at 80% 80%, rgba(191,255,0,0.12) 0%, transparent 50%),
+                linear-gradient(180deg, rgba(7,8,10,0.85) 0%, rgba(7,8,10,0.3) 35%, rgba(7,8,10,0.85) 80%, #07080A 100%)
               `,
             }}
           />
@@ -157,13 +281,13 @@ export default function HomePage() {
 
         {/* Hero Content */}
         <div className="relative z-10 max-w-5xl mx-auto text-center flex flex-col items-center">
-          
-          {/* Live Media Badge */}
+
+          {/* Top Brand Tag */}
           <motion.div
             initial={{ opacity: 0, y: -15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="mb-6 inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-white/[0.06] border border-white/15 backdrop-blur-md shadow-[0_0_20px_rgba(255,107,0,0.2)]"
+            className="mb-5 inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-white/[0.06] border border-white/15 backdrop-blur-md shadow-[0_0_20px_rgba(255,107,0,0.25)]"
           >
             <span className="w-2 h-2 rounded-full bg-[#FF6B00] animate-pulse" />
             <span className="text-[11px] font-sport uppercase tracking-[0.28em] text-white font-bold">
@@ -175,7 +299,7 @@ export default function HomePage() {
           <motion.h1
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.15 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
             className="font-display uppercase tracking-tight text-white leading-[0.92] mb-6 drop-shadow-2xl"
             style={{ fontSize: 'clamp(46px, 9vw, 102px)' }}
           >
@@ -192,7 +316,7 @@ export default function HomePage() {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="text-white/80 text-base sm:text-lg md:text-xl font-normal max-w-2xl mx-auto leading-relaxed mb-8"
           >
-            VMD Sports brings cricket closer through broadcast-grade live streaming, professional match cinematography, and engineered sports merchandise.
+            VMD Sports brings cricket closer through broadcast-grade live streaming, professional match cinematography, and pro-engineered sports merchandise built for athletes who demand peak performance.
           </motion.p>
 
           {/* Value Highlights Pill Row */}
@@ -215,7 +339,7 @@ export default function HomePage() {
             </span>
           </motion.div>
 
-          {/* Two Buttons: Explore VMD & Contact Us */}
+          {/* Two Primary Buttons: Shop Now & Contact Us */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -223,16 +347,19 @@ export default function HomePage() {
             className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto"
           >
             <button
-              onClick={() => scrollTo('services')}
-              className="btn-primary w-full sm:w-auto text-xs py-4 px-9"
+              onClick={() => scrollTo('merchandise')}
+              className="btn-primary w-full sm:w-auto text-xs py-4 px-9 group"
             >
-              Explore Capabilities <ArrowRight size={16} />
+              <ShoppingBag size={16} />
+              <span>Shop Now</span>
+              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
             </button>
             <button
               onClick={() => scrollTo('contact')}
               className="btn-secondary w-full sm:w-auto text-xs py-4 px-9"
             >
-              Contact Production
+              <Phone size={16} />
+              <span>Contact Us</span>
             </button>
           </motion.div>
         </div>
@@ -242,15 +369,87 @@ export default function HomePage() {
       <div className="hairline-divider" />
 
       {/* ════════════════════════════════════════════════════════════════════════
-          2. ABOUT SECTION (EDITORIAL SPLIT WITH SPORTS ACCENTS)
+          2. MERCHANDISE SECTION (FEATURED PRODUCTS & 5 CATEGORIES)
       ════════════════════════════════════════════════════════════════════════ */}
-      <section id="about" className="py-24 md:py-36 relative">
-        <div className="max-w-7xl mx-auto px-6 md:px-12">
+      <section id="merchandise" className="py-20 md:py-32 relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12">
+
+          {/* Section Header */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+            <div>
+              <span className="section-tag">
+                <span className="w-2 h-2 rounded-full bg-[#FF6B00]" />
+                Athlete Apparel & Gear
+              </span>
+              <h2 className="section-heading">
+                VMD <span className="text-[#FF6B00]">SPORTSWEAR</span>
+              </h2>
+            </div>
+            <div className="max-w-md">
+              <p className="text-white/60 text-sm leading-relaxed mb-3">
+                Official cricket sportswear engineered with premium performance fabrics, athletic breathability, and pro seam construction. Order directly on WhatsApp with instant confirmation.
+              </p>
+              <Link
+                to="/merchandise"
+                className="inline-flex items-center gap-1.5 text-xs font-sport uppercase tracking-wider text-[#FF6B00] hover:text-[#BFFF00] font-bold transition-colors"
+              >
+                <span>Browse Full Catalog</span>
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+          </div>
+
+          {/* 5 Product Categories Filter Bar */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-10 scrollbar-hide">
+            {CATEGORIES_LIST.map((cat) => {
+              const isSelected = activeCategory === cat.slug;
+              const count = categoryCounts[cat.slug] ?? 0;
+              return (
+                <button
+                  key={cat.slug}
+                  onClick={() => setActiveCategory(cat.slug)}
+                  className={`flex-shrink-0 px-4 py-2.5 rounded-sm border text-xs font-sport uppercase tracking-wider font-bold transition-all duration-200 cursor-pointer ${isSelected
+                    ? 'bg-[#FF6B00] text-black border-[#FF6B00] shadow-[0_0_20px_rgba(255,107,0,0.35)]'
+                    : 'bg-[#0E1015] border-white/10 text-white/70 hover:border-white/30 hover:text-white'
+                    }`}
+                >
+                  <span>{cat.name}</span>
+                  <span className={`ml-2 text-[10px] font-mono ${isSelected ? 'text-black/80' : 'text-white/40'}`}>
+                    ({count})
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Featured Products Grid: Clean & Consistent Product Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+            <AnimatePresence mode="popLayout">
+              {filteredProducts.map((prod) => (
+                <ProductCard
+                  key={prod._id || prod.slug}
+                  product={prod}
+                  onCardClick={(p) => trackClick(p, 'card_click')}
+                  onWhatsAppClick={handleDirectWhatsApp}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
+        </div>
+      </section>
+
+      {/* Hairline Divider */}
+      <div className="hairline-divider" />
+
+      {/* ════════════════════════════════════════════════════════════════════════
+          3. ABOUT SECTION (EDITORIAL SPLIT WITH SPORTS ACCENTS)
+      ════════════════════════════════════════════════════════════════════════ */}
+      <section id="about" className="py-20 md:py-32 relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
-            
+
             {/* Left: Professional Cricket Media Visual */}
             <div className="lg:col-span-6 relative">
-              {/* Outer decorative sports border */}
               <div className="relative img-zoom-wrap rounded-sm overflow-hidden border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.8)] aspect-[4/3] md:aspect-[16/11] bg-[#111317]">
                 <img
                   src="/images/about-cricket-media.webp"
@@ -259,7 +458,7 @@ export default function HomePage() {
                   loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
-                
+
                 {/* On-image status tags */}
                 <div className="absolute top-4 left-4">
                   <span className="text-[10px] font-sport uppercase tracking-[0.25em] text-black font-extrabold bg-[#BFFF00] px-3 py-1 shadow-md">
@@ -343,11 +542,11 @@ export default function HomePage() {
       <div className="hairline-divider" />
 
       {/* ════════════════════════════════════════════════════════════════════════
-          3. SERVICES SECTION (ELEVATED INTERACTIVE EDITORIAL TILES)
+          4. SERVICES SECTION (ELEVATED INTERACTIVE EDITORIAL TILES)
       ════════════════════════════════════════════════════════════════════════ */}
-      <section id="services" className="py-24 md:py-36 relative">
-        <div className="max-w-7xl mx-auto px-6 md:px-12">
-          
+      <section id="services" className="py-20 md:py-32 relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12">
+
           {/* Section Header */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
             <div className="max-w-xl">
@@ -429,94 +628,11 @@ export default function HomePage() {
       <div className="hairline-divider" />
 
       {/* ════════════════════════════════════════════════════════════════════════
-          4. MERCHANDISE SECTION (STUDIO 3D PRODUCT GALLERY)
-      ════════════════════════════════════════════════════════════════════════ */}
-      <section id="merchandise" className="py-24 md:py-36 relative">
-        <div className="max-w-7xl mx-auto px-6 md:px-12">
-          
-          {/* Section Header */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
-            <div>
-              <span className="section-tag">
-                <span className="w-2 h-2 rounded-full bg-[#FF6B00]" />
-                Athlete Apparel & Gear
-              </span>
-              <h2 className="section-heading">
-                VMD <span className="text-[#FF6B00]">MERCHANDISE</span>
-              </h2>
-            </div>
-            <p className="text-white/60 text-sm max-w-sm leading-relaxed">
-              Official cricket sportswear engineered with premium performance fabrics, athletic breathability, and pro seam construction. Order directly on WhatsApp.
-            </p>
-          </div>
-
-          {/* 5 Product Gallery */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-            {PRODUCTS.map((prod) => (
-              <div
-                key={prod.id}
-                className="group flex flex-col bg-[#0C0E12] subtle-border hover:border-[#FF6B00]/50 transition-all duration-300 hover:shadow-[0_12px_35px_rgba(0,0,0,0.8),0_0_20px_rgba(255,107,0,0.12)] rounded-sm overflow-hidden"
-              >
-                {/* Product Image Frame with Studio Radial Highlight */}
-                <div className="relative aspect-[3/4] bg-[#0E1015] overflow-hidden flex items-center justify-center p-4">
-                  {/* Subtle Studio Glow behind product */}
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.06)_0%,transparent_70%)] pointer-events-none" />
-                  
-                  <img
-                    src={prod.image}
-                    alt={prod.name}
-                    className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-108"
-                    loading="lazy"
-                  />
-
-                  {/* Category Pill */}
-                  <span className="absolute top-3 left-3 text-[10px] font-sport uppercase tracking-widest text-white/90 bg-black/75 backdrop-blur-md px-2.5 py-1 border border-white/10 rounded-xs">
-                    {prod.category}
-                  </span>
-                </div>
-
-                {/* Details & WhatsApp CTA */}
-                <div className="p-5 flex flex-col flex-1 justify-between gap-4 bg-[#090A0D]">
-                  <div>
-                    <span className="text-[10px] font-sport uppercase tracking-wider text-[#FF6B00] font-semibold block mb-1">
-                      {prod.tech}
-                    </span>
-                    <h3 className="font-sport font-bold text-sm uppercase tracking-wide text-white group-hover:text-[#FF6B00] transition-colors line-clamp-2 min-h-[2.5rem]">
-                      {prod.name}
-                    </h3>
-                    
-                    <div className="mt-2 flex items-baseline gap-2">
-                      <span className="text-xl font-display tracking-tight text-white">
-                        ₹{prod.price.toLocaleString('en-IN')}
-                      </span>
-                      <span className="text-[10px] font-sport uppercase text-white/40 tracking-wider">
-                        MRP Incl. Taxes
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleWhatsAppEnquiry(prod.name, prod.price)}
-                    className="btn-whatsapp w-full py-3 text-xs font-sport uppercase tracking-wider font-bold"
-                  >
-                    <MessageCircle size={15} /> Enquire on WhatsApp
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Hairline Divider */}
-      <div className="hairline-divider" />
-
-      {/* ════════════════════════════════════════════════════════════════════════
           5. LIVE STREAMING SECTION (BROADCAST CALLOUT)
       ════════════════════════════════════════════════════════════════════════ */}
       <section
         id="livestreaming"
-        className="relative py-32 md:py-44 overflow-hidden flex items-center justify-center text-center"
+        className="relative py-28 md:py-40 overflow-hidden flex items-center justify-center text-center"
       >
         {/* Full-Width Stadium Broadcast Image Background */}
         <div className="absolute inset-0 z-0">
@@ -538,8 +654,8 @@ export default function HomePage() {
         </div>
 
         {/* Content Box */}
-        <div className="relative z-10 max-w-4xl mx-auto px-6">
-          
+        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6">
+
           {/* Red REC Recording Badge */}
           <div className="mb-6 inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-black/60 border border-red-500/30 backdrop-blur-md shadow-[0_0_20px_rgba(239,68,68,0.2)]">
             <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
@@ -588,17 +704,19 @@ export default function HomePage() {
               href={`tel:${phone}`}
               className="btn-primary w-full sm:w-auto text-xs py-4 px-9"
             >
-              <Phone size={16} /> Call Production Desk
+              <Phone size={16} />
+              <span>Call Production Desk</span>
             </a>
             <a
               href={`https://wa.me/${whatsappNum}?text=${encodeURIComponent(
-                'Hi VMD Sports! I would like to enquire about your Live Cricket Streaming services.'
+                ' Hello ! Im interested in your sportswear collection.Could you share some details.'
               )}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-whatsapp w-full sm:w-auto text-xs py-4 px-9"
             >
-              <MessageCircle size={16} /> WhatsApp for Streaming
+              <MessageCircle size={16} />
+              <span>WhatsApp for Streaming</span>
             </a>
           </div>
         </div>
@@ -610,8 +728,8 @@ export default function HomePage() {
       {/* ════════════════════════════════════════════════════════════════════════
           6. CONTACT SECTION (ELEGANT DIRECT CHANNELS)
       ════════════════════════════════════════════════════════════════════════ */}
-      <section id="contact" className="py-24 md:py-36 relative">
-        <div className="max-w-4xl mx-auto px-6 text-center">
+      <section id="contact" className="py-20 md:py-32 relative">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
           <span className="section-tag">
             <span className="w-2 h-2 rounded-full bg-[#FF6B00]" />
             Direct Communication
@@ -650,9 +768,7 @@ export default function HomePage() {
               <span className="text-xs font-sport uppercase tracking-[0.2em] text-white/50">WhatsApp Channel</span>
               <span className="font-display text-2xl text-white">Direct Chat</span>
               <a
-                href={`https://wa.me/${whatsappNum}?text=${encodeURIComponent(
-                  'Hi VMD Sports! I would like to get in touch with you.'
-                )}`}
+                href={whatsappChatUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-whatsapp text-xs py-2.5 px-6 mt-2"
@@ -662,43 +778,23 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Email, Instagram, YouTube */}
-          <div className="flex flex-wrap items-center justify-center gap-8 pt-8 border-t border-white/10 text-xs font-sport uppercase tracking-wider text-white/60">
-            {email && (
+          {/* Direct Email Channel */}
+          {email && (
+            <div className="flex items-center justify-center pt-8 border-t border-white/10 text-xs font-sport uppercase tracking-wider text-white/60">
               <a
                 href={`mailto:${email}`}
                 className="flex items-center gap-2 hover:text-[#FF6B00] transition-colors"
               >
                 <Mail size={16} className="text-[#FF6B00]" /> {email}
               </a>
-            )}
-            {instagram && (
-              <a
-                href={instagram}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 hover:text-white transition-colors"
-              >
-                <Instagram size={16} className="text-[#FF6B00]" /> Instagram
-              </a>
-            )}
-            {youtube && (
-              <a
-                href={youtube}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 hover:text-white transition-colors"
-              >
-                <Youtube size={16} className="text-red-500" /> YouTube
-              </a>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </section>
 
       {/* Floating Instant WhatsApp Button */}
       <a
-        href={`https://wa.me/${whatsappNum}?text=${encodeURIComponent('Hi VMD Sports! I have an enquiry.')}`}
+        href={whatsappChatUrl}
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Chat on WhatsApp"

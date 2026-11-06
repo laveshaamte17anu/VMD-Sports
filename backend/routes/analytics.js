@@ -101,51 +101,179 @@ router.post(
   }
 );
 
+// ─── NOTIFY VMD TEAM (WhatsApp Cloud API / Email / Admin Dashboard) ────────
+async function notifyVmdTeam(enquiryData) {
+  const {
+    META_WA_PHONE_NUMBER_ID,
+    META_WA_SYSTEM_TOKEN,
+    VMD_NOTIFICATION_PHONE,
+    VMD_BUSINESS_PHONE = '919819483036',
+  } = process.env;
+
+  // 1. WhatsApp Business Cloud API (Dispatched only to a separate notification number, never to itself)
+  if (META_WA_PHONE_NUMBER_ID && META_WA_SYSTEM_TOKEN && VMD_NOTIFICATION_PHONE) {
+    const cleanNotifyPhone = String(VMD_NOTIFICATION_PHONE).replace(/\D/g, '');
+    const cleanBusinessPhone = String(VMD_BUSINESS_PHONE).replace(/\D/g, '');
+
+    if (cleanNotifyPhone && cleanNotifyPhone !== cleanBusinessPhone) {
+      try {
+        const https = require('https');
+        const payload = JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: cleanNotifyPhone,
+          type: 'image',
+          image: {
+            link: enquiryData.productImageUrl || 'https://vmd-sports.vercel.app/images/vmd_cricket_jersey.jpg',
+            caption: `*NEW VMD SPORTS ENQUIRY*\n\nProduct: ${enquiryData.productName}\nSelling Price: ₹${Number(enquiryData.productDiscountPrice || enquiryData.productPrice).toLocaleString('en-IN')}\nSize: ${enquiryData.selectedSize || 'N/A'}\nColor: ${enquiryData.selectedColor || 'N/A'}\nDate: ${enquiryData.dateIST}\n\nView details in Admin Dashboard.`
+          }
+        });
+
+        const req = https.request({
+          hostname: 'graph.facebook.com',
+          path: `/v19.0/${META_WA_PHONE_NUMBER_ID}/messages`,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${META_WA_SYSTEM_TOKEN}`,
+            'Content-Length': Buffer.byteLength(payload)
+          }
+        }, (res) => {
+          let resData = '';
+          res.on('data', chunk => resData += chunk);
+          res.on('end', () => {
+            console.log('[Notification] Cloud API notification dispatched. Status:', res.statusCode);
+          });
+        });
+
+        req.on('error', (e) => {
+          console.warn('[Notification] Cloud API dispatch notice:', e.message);
+        });
+
+        req.write(payload);
+        req.end();
+      } catch (err) {
+        console.warn('[Notification] Cloud API non-fatal error:', err.message);
+      }
+    }
+  }
+
+  // 2. Email notification fallback if SMTP credentials exist
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    try {
+      const nodemailer = require('nodemailer');
+      const transporter = nodemailer.createTransport({
+        host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+        port: Number(process.env.EMAIL_PORT) || 587,
+        secure: false,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS
+        }
+      });
+
+      const recipient = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.EMAIL_USER || 'vdhavade50@gmail.com';
+      await transporter.sendMail({
+        from: `"VMD Sports Alerts" <${process.env.EMAIL_USER}>`,
+        to: recipient,
+        subject: `🚨 New Product WhatsApp Enquiry: ${enquiryData.productName}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+            <h2 style="color: #FF6B00; margin-top: 0;">New Product Enquiry Received</h2>
+            <p>A customer clicked <strong>Inquiry on WhatsApp</strong> for a product.</p>
+            ${enquiryData.productImageUrl ? `<img src="${enquiryData.productImageUrl}" alt="${enquiryData.productName}" style="width: 100%; max-height: 280px; object-fit: cover; border-radius: 6px; margin: 15px 0;" />` : ''}
+            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+              <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Product:</strong></td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${enquiryData.productName}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Selling Price:</strong></td><td style="padding: 8px; border-bottom: 1px solid #ddd;">₹${Number(enquiryData.productDiscountPrice || enquiryData.productPrice).toLocaleString('en-IN')}</td></tr>
+              ${enquiryData.productDiscountPrice && enquiryData.productDiscountPrice < enquiryData.productPrice ? `<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>MRP:</strong></td><td style="padding: 8px; border-bottom: 1px solid #ddd;">₹${Number(enquiryData.productPrice).toLocaleString('en-IN')}</td></tr>` : ''}
+              <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Size:</strong></td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${enquiryData.selectedSize || 'N/A'}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Color:</strong></td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${enquiryData.selectedColor || 'N/A'}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Date (IST):</strong></td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${enquiryData.dateIST}</td></tr>
+            </table>
+          </div>
+        `
+      });
+      console.log('[Notification] Email alert sent to VMD team:', recipient);
+    } catch (err) {
+      console.warn('[Notification] Email alert non-fatal notice:', err.message);
+    }
+  }
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // PUBLIC: POST /api/analytics/whatsapp-enquiry
 // Records a WhatsApp enquiry event BEFORE opening WhatsApp
+// Supports existing MongoDB ObjectId or client-provided product payload
 // ════════════════════════════════════════════════════════════════════════════
 router.post(
   '/whatsapp-enquiry',
   enquiryLimiter,
-  [
-    body('productId')
-      .notEmpty().withMessage('productId is required')
-      .custom((v) => mongoose.Types.ObjectId.isValid(v)).withMessage('Invalid productId'),
-  ],
   async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
-
     try {
-      const { productId } = req.body;
+      const {
+        productId,
+        productName,
+        productPrice,
+        productDiscountPrice,
+        productImageUrl,
+        productCategory,
+        productSlug,
+        selectedSize,
+        selectedColor,
+      } = req.body;
 
-      const product = await Product.findById(productId)
-        .select('name images price discountPrice slug')
-        .populate('category', 'name')
-        .lean();
-
-      if (!product) {
-        return res.status(404).json({ success: false, message: 'Product not found' });
+      let product = null;
+      if (productId && mongoose.Types.ObjectId.isValid(productId)) {
+        product = await Product.findById(productId)
+          .select('name images price discountPrice slug')
+          .populate('category', 'name')
+          .lean();
       }
+
+      const finalName = product?.name || productName;
+      if (!finalName) {
+        return res.status(400).json({ success: false, message: 'Product name or valid productId is required' });
+      }
+
+      const finalImage = (product ? extractImageUrl(product.images) : null) || productImageUrl || null;
+      const rawPrice = product ? product.price : (Number(productPrice) || 0);
+      const rawDiscount = product ? (product.discountPrice || null) : (productDiscountPrice ? Number(productDiscountPrice) : null);
+      const finalPrice = rawPrice;
+      const finalDiscount = (rawDiscount != null && rawDiscount < rawPrice) ? rawDiscount : null;
+      const finalCategory = product?.category?.name || productCategory || null;
+      const finalSlug = product?.slug || productSlug || null;
 
       const now = new Date();
       const dateIST = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
-      const enquiry = await WhatsappEnquiry.create({
-        productId,
-        productName: product.name,
-        productImageUrl: extractImageUrl(product.images),
-        productPrice: product.price,
-        productDiscountPrice: product.discountPrice || null,
-        productCategory: product.category?.name || null,
-        productSlug: product.slug || null,
+      const enquiryData = {
+        productName: finalName,
+        productImageUrl: finalImage,
+        productPrice: Number(finalPrice),
+        productDiscountPrice: finalDiscount,
+        productCategory: finalCategory,
+        productSlug: finalSlug,
+        selectedSize: selectedSize || null,
+        selectedColor: selectedColor || null,
         eventType: 'whatsapp_enquiry',
         enquiredAt: now,
         dateIST,
         status: 'WhatsApp Opened',
+      };
+
+      if (product?._id) {
+        enquiryData.productId = product._id;
+      } else if (productId && mongoose.Types.ObjectId.isValid(productId)) {
+        enquiryData.productId = productId;
+      } else {
+        enquiryData.productId = new mongoose.Types.ObjectId();
+      }
+
+      const enquiry = await WhatsappEnquiry.create(enquiryData);
+
+      // Asynchronously trigger team notification (Cloud API / Email) without blocking customer response
+      notifyVmdTeam(enquiryData).catch(err => {
+        console.debug('[Notification] Non-fatal background notify error:', err.message);
       });
 
       return res.status(201).json({ success: true, enquiryId: enquiry._id });
